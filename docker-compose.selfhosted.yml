@@ -1,0 +1,81 @@
+services:
+  mysql:
+    image: mirror.ccs.tencentyun.com/library/mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: knowledge_base
+      MYSQL_USER: knowledge_base
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set in .env.selfhosted}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set in .env.selfhosted}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [knowledge_backend]
+
+  redis:
+    image: mirror.ccs.tencentyun.com/library/redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?set in .env.selfhosted}"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set in .env.selfhosted}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [knowledge_backend]
+
+  qdrant:
+    image: mirror.ccs.tencentyun.com/qdrant/qdrant:v1.13.4
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks: [knowledge_backend]
+
+  api:
+    build: .
+    restart: unless-stopped
+    env_file: .env.selfhosted
+    environment:
+      PORT: 4180
+      APP_BASE_PATH: /apps/knowledge-base/
+      MYSQL_URL: mysql://knowledge_base:${MYSQL_PASSWORD}@mysql:3306/knowledge_base
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      QDRANT_URL: http://qdrant:6333
+    ports:
+      - "4180:4180"
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      qdrant: { condition: service_started }
+    networks: [knowledge_backend]
+
+  worker:
+    build: .
+    restart: unless-stopped
+    command: ["node", "src/ingestion-worker.mjs"]
+    env_file: .env.selfhosted
+    environment:
+      MYSQL_URL: mysql://knowledge_base:${MYSQL_PASSWORD}@mysql:3306/knowledge_base
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      QDRANT_URL: http://qdrant:6333
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      qdrant: { condition: service_started }
+    networks: [knowledge_backend]
+
+networks:
+  knowledge_backend:
+
+volumes:
+  mysql_data:
+  redis_data:
+  qdrant_data:
