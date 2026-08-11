@@ -1,0 +1,10 @@
+export class SearchIndex {
+  constructor({ node, indexName, dimensions }) { this.node = node.replace(/\/$/, ''); this.indexName = indexName; this.dimensions = dimensions }
+  async call(path, options = {}) { const r = await fetch(`${this.node}${path}`, { ...options, headers: { 'content-type': 'application/json' } }); if (!r.ok) throw new Error(`Qdrant request failed: ${r.status}`); return r.json() }
+  async ensureMapping() { const r = await fetch(`${this.node}/collections/${this.indexName}/exists`); const exists = r.ok && (await r.json()).result?.exists; if (!exists) await this.call(`/collections/${this.indexName}`, { method: 'PUT', body: JSON.stringify({ vectors: { size: this.dimensions, distance: 'Cosine' } }) }) }
+  async indexChunks(chunks, vectors) { await this.call(`/collections/${this.indexName}/points?wait=true`, { method: 'PUT', body: JSON.stringify({ points: chunks.map((chunk, i) => ({ id: chunk.chunkId.replace('kchunk_', ''), vector: vectors[i], payload: chunk })) }) }) }
+  async removeDocument(documentId) { await this.call(`/collections/${this.indexName}/points/delete?wait=true`, { method: 'POST', body: JSON.stringify({ filter: { must: [{ key: 'documentId', match: { value: documentId } }] } }) }) }
+  async hybridSearch({ vector, limit = 10 }) { const filter = { must: [{ key: 'status', match: { value: 'active' } }, { key: 'aiAllowed', match: { value: true } }, { key: 'securityLevel', match: { any: ['public', 'internal'] } }] }; const d = await this.call(`/collections/${this.indexName}/points/search`, { method: 'POST', body: JSON.stringify({ vector, limit, filter, with_payload: true }) }); return (d.result || []).map(x => ({ ...x.payload, score: x.score })) }
+}
+
+export function reciprocalRankFuse(resultSets, limit, k = 60) { const scores = new Map(); for (const set of resultSets) set.forEach((hit, i) => { const x = scores.get(hit.chunkId) || { hit, score: 0 }; x.score += 1 / (k + i + 1); scores.set(hit.chunkId, x) }); return [...scores.values()].sort((a,b) => b.score-a.score).slice(0, limit).map(x => ({ ...x.hit, score: x.score })) }
