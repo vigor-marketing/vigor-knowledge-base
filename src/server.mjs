@@ -1,9 +1,10 @@
 import Fastify from 'fastify'
 import multipart from '@fastify/multipart'
 import { readFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
 import { extname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createDocumentMetadata, validateUploadFile } from './document-policy.mjs'
+import { allowedSecurityLevels, createDocumentMetadata, validateUploadFile } from './document-policy.mjs'
 import { loadConfig } from './config.mjs'
 import { CosStorage } from './cos-storage.mjs'
 import { DocumentRepository } from './document-repository.mjs'
@@ -59,8 +60,19 @@ app.get('/api/v1/search', async (request, reply) => {
   const query = typeof request.query?.q === 'string' ? request.query.q.trim() : ''
   if (!query || query.length > 500) return reply.code(400).send({ error: { code: 'VALIDATION_ERROR', message: 'q must contain 1 to 500 characters.' } })
   const vector = (await embeddings.embed([query]))[0]
-  const results = await searchIndex.hybridSearch({ query, vector })
+  const results = await searchIndex.hybridSearch({ query, vector, securityLevels: allowedSecurityLevels(actor) })
   return { data: { query, results: results.map(result => ({ chunkId: result.chunkId, documentId: result.documentId, versionId: result.versionId, content: result.content, headingPath: result.headingPath, score: result.score })) } }
+})
+
+app.get('/api/v1/documents', async (request, reply) => {
+  if (!authenticate || !repository) return reply.code(503).send({ error: { code: 'DOWNLOAD_NOT_CONFIGURED', message: 'Document download is not configured.' } })
+  let actor
+  try { actor = await authenticate({ authorization: request.headers.authorization, cookie: request.headers.cookie }) } catch { actor = undefined }
+  if (!actor) return reply.code(401).send({ error: { code: 'UNAUTHENTICATED', message: 'A verified platform user is required.' } })
+  const allowed = allowedSecurityLevels(actor)
+  const documents = await repository.listDownloadableDocuments()
+  const visible = documents.filter(document => allowed.includes(document.securityLevel)).map(({ securityLevel, ...document }) => document)
+  return { data: visible }
 })
 
 app.get('/api/v1/documents/:documentId/download', async (request, reply) => {
@@ -69,7 +81,7 @@ app.get('/api/v1/documents/:documentId/download', async (request, reply) => {
   try { actor = await authenticate({ authorization: request.headers.authorization, cookie: request.headers.cookie }) } catch { actor = undefined }
   if (!actor) return reply.code(401).send({ error: { code: 'UNAUTHENTICATED', message: 'A verified platform user is required.' } })
   const document = await repository.getDownloadableDocument(request.params.documentId)
-  if (!document) return reply.code(404).send({ error: { code: 'DOCUMENT_NOT_FOUND', message: 'This document is unavailable.' } })
+  if (!document || !allowedSecurityLevels(actor).includes(document.securityLevel)) return reply.code(404).send({ error: { code: 'DOCUMENT_NOT_FOUND', message: 'This document is unavailable.' } })
   return reply.redirect(storage.createDownloadUrl(document.objectKey, 600))
 })
 
@@ -81,7 +93,7 @@ app.post('/api/v1/ask', async (request, reply) => {
   const question = typeof request.body?.question === 'string' ? request.body.question.trim() : ''
   if (!question || question.length > 500) return reply.code(400).send({ error: { code: 'VALIDATION_ERROR', message: 'question must contain 1 to 500 characters.' } })
   const vector = (await embeddings.embed([question]))[0]
-  const sources = await searchIndex.hybridSearch({ query: question, vector, limit: 5 })
+  const sources = await searchIndex.hybridSearch({ query: question, vector, limit: 5, securityLevels: allowedSecurityLevels(actor) })
   const result = await answers.answer(question, sources)
   return { data: { ...result, sources: sources.map(source => ({ documentId: source.documentId, versionId: source.versionId, chunkId: source.chunkId, headingPath: source.headingPath, content: source.content })) } }
 })
@@ -138,16 +150,16 @@ app.post('/api/v1/documents', async (request, reply) => {
   const parsedMetadata = createDocumentMetadata.safeParse(metadata)
   if (!parsedMetadata.success || !file) return reply.code(400).send({ error: { code: 'VALIDATION_ERROR', message: 'A valid metadata field and one file are required.' } })
 
-  const validation = validateUploadFile({ filename: file.filename, mimetype: file.mimetype, bytes: 1 }, maxUploadBytes)
-  if (!validation.ok) return reply.code(422).send({ error: { code: validation.code, message: 'The uploaded file does not meet the knowledge base policy.' } })
-
   const documentId = `kdoc_${randomUUID()}`
   let uploaded
   try {
     uploaded = await storage.uploadSource({ documentId, stream: file.file, mimeType: file.mimetype })
-    if (file.file.truncated || uploaded.byteSize > maxUploadBytes) {
+    const validation = validateUploadFile({ filename: file.filename, mimetype: file.mimetype, bytes: uploaded.byteSize }, maxUploadBytes)
+    if (!validation.ok || file.file.truncated) {
       await storage.deleteSource(uploaded.objectKey)
-      return reply.code(413).send({ error: { code: 'FILE_TOO_LARGE', message: 'The uploaded file exceeds the configured size limit.' } })
+      const code = file.file.truncated || validation.code === 'FILE_TOO_LARGE' ? 'FILE_TOO_LARGE' : validation.code
+      const status = code === 'FILE_TOO_LARGE' ? 413 : 422
+      return reply.code(status).send({ error: { code, message: 'The uploaded file does not meet the knowledge base policy.' } })
     }
     const created = await repository.createDraft({ documentId, metadata: parsedMetadata.data, uploaded, originalFilename: file.filename, mimeType: file.mimetype, actorId: actor.personId })
     await ingestionQueue.enqueue(created)

@@ -12,7 +12,7 @@ export function loadConfig(environment = process.env) {
       ? {
           node: environment.QDRANT_URL,
           apiKey: undefined,
-          indexName: environment.ELASTICSEARCH_INDEX || 'knowledge_chunks_v1',
+          indexName: environment.QDRANT_INDEX || 'knowledge_chunks_v1',
           embeddingUrl: environment.EMBEDDING_API_URL,
           embeddingApiKey: environment.EMBEDDING_API_KEY,
           embeddingModel: environment.EMBEDDING_MODEL || 'bge-m3',

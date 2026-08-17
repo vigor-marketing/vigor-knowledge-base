@@ -46,9 +46,22 @@ export class DocumentRepository {
     return rows[0]
   }
 
+  async listDownloadableDocuments() {
+    const [rows] = await this.pool.execute(
+      `SELECT document.document_id AS documentId, document.title AS title, document.document_type AS documentType,
+              document.security_level AS securityLevel, version.version_label AS versionLabel,
+              document.updated_at AS updatedAt
+       FROM knowledge_documents document
+       JOIN knowledge_document_versions version ON version.version_id = document.current_version_id
+       WHERE document.status = 'active'
+       ORDER BY document.updated_at DESC`,
+    )
+    return rows
+  }
+
   async getDownloadableDocument(documentId) {
     const [rows] = await this.pool.execute(
-      `SELECT version.object_key AS objectKey
+      `SELECT version.object_key AS objectKey, document.security_level AS securityLevel
        FROM knowledge_documents document
        JOIN knowledge_document_versions version ON version.version_id = document.current_version_id
        WHERE document.document_id = ? AND document.status = 'active'`,

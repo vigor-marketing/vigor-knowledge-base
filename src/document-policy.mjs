@@ -20,6 +20,16 @@ export const createDocumentMetadata = z.object({
   aiAllowed: z.boolean().default(true),
 })
 
+// 权限等级映射：普通员工只能看到公开/内部资料，管理者可看机密，专职管理员可看全部。
+const fullClearanceRoles = ['admin_specialist']
+const confidentialClearanceRoles = ['general_manager', 'admin_specialist']
+
+export function allowedSecurityLevels(actor) {
+  if (fullClearanceRoles.some(role => actor.roles.includes(role))) return ['public', 'internal', 'confidential', 'restricted']
+  if (confidentialClearanceRoles.some(role => actor.roles.includes(role))) return ['public', 'internal', 'confidential']
+  return ['public', 'internal']
+}
+
 export function validateUploadFile({ filename, mimetype, bytes }, maxUploadBytes) {
   const extension = extname(filename || '').toLowerCase()
   const extensions = allowedFiles.get(mimetype)
