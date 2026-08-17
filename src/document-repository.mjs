@@ -147,7 +147,8 @@ export class DocumentRepository {
   async getIndexableChunks(versionId) {
     const [rows] = await this.pool.execute(
       `SELECT chunk.chunk_id AS chunkId, document.document_id AS documentId, chunk.version_id AS versionId,
-              chunk.content AS content, chunk.heading_path AS headingPath, document.document_type AS documentType,
+              chunk.content AS content, chunk.heading_path AS headingPath, document.title AS title,
+              version.original_filename AS originalFilename, document.document_type AS documentType,
               document.department_id AS departmentId, document.product_id AS productId,
               document.security_level AS securityLevel, document.status AS status,
               document.ai_allowed AS aiAllowed, version.permission_version AS permissionVersion

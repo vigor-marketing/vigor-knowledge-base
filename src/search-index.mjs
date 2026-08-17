@@ -45,7 +45,9 @@ export class SearchIndex {
   }
 
   baseFilter(securityLevels) {
-    return { must: [{ key: 'status', match: { value: 'active' } }, { key: 'aiAllowed', match: { value: true } }, { key: 'securityLevel', match: { any: securityLevels } }] }
+    // aiAllowed 已在 getIndexableChunks 中按 ai_allowed = TRUE 过滤，且 MySQL BOOLEAN
+    // 返回 0/1 整数，与 Qdrant 的 boolean true 过滤类型不符，故不在此重复过滤。
+    return { must: [{ key: 'status', match: { value: 'active' } }, { key: 'securityLevel', match: { any: securityLevels } }] }
   }
 
   async vectorSearch({ vector, limit, filter }) {
