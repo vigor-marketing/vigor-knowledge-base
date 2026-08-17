@@ -5,18 +5,22 @@ export function loadConfig(environment = process.env) {
   return {
     port,
     maxUploadBytes,
+    testAdmin: environment.KNOWLEDGE_BASE_TEST_ADMIN === 'true',
     basePath: environment.APP_BASE_PATH || '/apps/knowledge-base/',
     mysqlUrl: environment.MYSQL_URL,
     redisUrl: environment.REDIS_URL,
-    search: environment.QDRANT_URL && environment.EMBEDDING_API_URL && environment.EMBEDDING_API_KEY
+    search: environment.QDRANT_URL && ((environment.EMBEDDING_API_URL && environment.EMBEDDING_API_KEY) || (environment.HUNYUAN_EMBEDDING === 'true' && environment.TENCENTCLOUD_SECRET_ID && environment.TENCENTCLOUD_SECRET_KEY))
       ? {
           node: environment.QDRANT_URL,
           apiKey: undefined,
           indexName: environment.QDRANT_INDEX || 'knowledge_chunks_v1',
           embeddingUrl: environment.EMBEDDING_API_URL,
           embeddingApiKey: environment.EMBEDDING_API_KEY,
-          embeddingModel: environment.EMBEDDING_MODEL || 'bge-m3',
+          embeddingModel: environment.HUNYUAN_EMBEDDING === 'true' ? 'hunyuan-embedding' : environment.EMBEDDING_MODEL || 'bge-m3',
           embeddingDimensions: Number(environment.EMBEDDING_DIMENSIONS || 1024),
+          hunyuan: environment.HUNYUAN_EMBEDDING === 'true'
+            ? { secretId: environment.TENCENTCLOUD_SECRET_ID, secretKey: environment.TENCENTCLOUD_SECRET_KEY, region: environment.HUNYUAN_REGION || 'ap-shanghai' }
+            : undefined,
         }
       : undefined,
     deepseek: environment.DEEPSEEK_API_KEY

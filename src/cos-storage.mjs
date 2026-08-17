@@ -24,14 +24,18 @@ export class CosStorage {
   async uploadSource({ documentId, stream, mimeType }) {
     const versionId = `kver_${randomUUID()}`
     const objectKey = `${this.prefix}/documents/${documentId}/versions/${versionId}/source`
-    const digest = createHash('sha256')
-    let byteSize = 0
-    stream.on('data', chunk => {
-      byteSize += chunk.length
-      digest.update(chunk)
-    })
-    await putObject(this.client, { Bucket: this.bucket, Region: this.region, Key: objectKey, Body: stream, ContentType: mimeType })
-    return { versionId, objectKey, byteSize, contentHash: digest.digest('hex') }
+    const chunks = []
+    for await (const chunk of stream) chunks.push(chunk)
+    const body = Buffer.concat(chunks)
+    const contentHash = createHash('sha256').update(body).digest('hex')
+    await putObject(this.client, { Bucket: this.bucket, Region: this.region, Key: objectKey, Body: body, ContentType: mimeType })
+    return { versionId, objectKey, byteSize: body.length, contentHash }
+  }
+  async uploadCommentAttachment({ documentId, commentId, stream, mimeType }) {
+    const attachmentId = `katt_${randomUUID()}`; const objectKey = `${this.prefix}/documents/${documentId}/comments/${commentId}/attachments/${attachmentId}`; const chunks = []
+    for await (const chunk of stream) chunks.push(chunk)
+    const body = Buffer.concat(chunks); await putObject(this.client, { Bucket: this.bucket, Region: this.region, Key: objectKey, Body: body, ContentType: mimeType })
+    return { attachmentId, objectKey, byteSize: body.length }
   }
 
   async deleteSource(objectKey) {

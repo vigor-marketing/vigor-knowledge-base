@@ -49,8 +49,10 @@ services:
       MYSQL_URL: mysql://knowledge_base:${MYSQL_PASSWORD}@mysql:3306/knowledge_base
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       QDRANT_URL: http://qdrant:6333
+    extra_hosts:
+      - "host.docker.internal:172.20.0.1"
     ports:
-      - "4180:4180"
+      - "127.0.0.1:4180:4180"
     depends_on:
       mysql: { condition: service_healthy }
       redis: { condition: service_healthy }

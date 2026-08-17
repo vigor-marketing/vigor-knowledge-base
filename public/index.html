@@ -1,1 +1,45 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><meta name="robots" content="noindex"/><title>企业知识库</title><link rel="stylesheet" href="styles.css"/></head><body><main class="shell"><aside class="sidebar"><div class="brand"><span class="brand-mark">▦</span><span>企业知识库</span></div><nav aria-label="知识库菜单"><button class="nav active" data-panel="search"><b>⌕</b>资料查询</button><button class="nav" data-panel="manage"><b>↑</b>资料管理</button><button class="nav" data-panel="downloads"><b>⇩</b>资料下载</button></nav><p class="side-note">需要什么资料，随时回来找</p></aside><section class="content"><header><p class="eyebrow">VIGOR / KNOWLEDGE BASE</p><h1 id="page-title">资料查询</h1><p id="service-status" class="status">正在准备资料库</p></header><section id="search" class="panel active"><h2>快速找到你需要的资料</h2><form id="search-form" class="search-form"><input id="search-query" type="search" maxlength="500" placeholder="例如：P110 产品的最大工作压力" required/><button>搜索资料</button></form><div id="search-state" class="empty"><h3>输入关键词开始查找</h3><p>找到后可直接下载，也能看到资料所在分类。</p></div><div id="search-results" class="list" hidden></div></section><section id="manage" class="panel"><h2>资料管理</h2><p>把资料放到对应分类；更新时会保留每一次修改记录。</p><form id="upload-form" class="form"><label>资料标题<input name="title" required/></label><label>资料分类<select name="documentType"><option value="PRODUCT">产品资料</option><option value="TECHNICAL">技术资料</option><option value="SOP">SOP / 制度</option></select></label><label>文件<input name="file" type="file" accept=".pdf,.docx,.xlsx,.pptx,.txt,.md" required/></label><button>上传资料</button><p id="upload-state" role="status"></p></form></section><section id="downloads" class="panel"><h2>资料下载</h2><p>按分类下载已发布资料。用完后，也欢迎留下评价或建议。</p><div class="filters"><button class="filter active" data-filter="ALL">全部资料</button><button class="filter" data-filter="PRODUCT">产品资料</button><button class="filter" data-filter="TECHNICAL">技术资料</button><button class="filter" data-filter="SOP">SOP / 制度</button></div><div id="download-list" class="download-list"><article class="empty"><h3>这里还没有资料</h3><p>资料发布后会按分类展示，并标明最新版本和更新时间。</p></article></div></section></section></main><script type="module" src="app.js"></script></body></html>
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <meta name="robots" content="noindex"/>
+  <title>企业知识库</title>
+  <link rel="stylesheet" href="styles.css?v=20260814-6"/>
+</head>
+<body>
+  <main class="shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">▦</span><span>企业知识库</span></div>
+      <nav aria-label="知识库菜单">
+        <button class="nav active" data-panel="downloads"><b>⇩</b>资料下载</button>
+        <button class="nav" data-panel="manage"><b>↑</b>资料管理</button>
+      </nav>
+      <p class="side-note">需要什么资料，随时回来找</p>
+    </aside>
+    <section class="content">
+      <header>
+        <div><h1 id="page-title">资料下载</h1><p id="page-description" class="page-description">搜索、筛选并下载已发布的企业资料。</p></div>
+        <div class="access"><p class="access-label">访问权限由工作平台统一管理</p><p id="service-status" class="status" role="status" aria-live="polite">正在连接资料服务</p></div>
+      </header>
+
+      <section id="manage" class="panel">
+        <div class="section-heading"><div><h2>资料管理</h2><p>上传、更新、发布与归档资料；每个操作都保留版本和审计记录。</p></div></div>
+        <div class="management-grid">
+          <form id="upload-form" class="form card"><h3>上传资料</h3><label>更新对象（可选）<select id="existing-document" name="existingDocumentId"><option value="">不选择资料（系统将新建资料）</option></select></label><p id="upload-mode" class="operation-mode" role="status">本次操作：新建资料 · 将创建第 1 个版本。</p><p class="hint">选择已有资料时，系统会自动按“更新版本”处理；标题和分类保持不变。</p><label>资料标题<input id="upload-title" name="title" maxlength="255" required/></label><label>资料分类<select id="upload-type" name="documentType" required></select></label><label>文件<input name="file" type="file" accept=".pdf,.docx,.xlsx,.pptx,.txt,.md" required/></label><button id="upload-submit">新建资料并上传</button><p id="upload-state" role="status"></p></form>
+          <form id="type-form" class="form card"><h3>资料分类</h3><p class="hint">可建立一级或子分类；编码留空时系统自动生成。新增后会立即出现在上传分类和下载筛选中。</p><label>上级分类（可选）<select name="parentTypeCode" id="type-parent"><option value="">作为一级分类</option></select></label><label>类型名称<input name="displayName" maxlength="64" placeholder="例如：培训资料" required/></label><label>类型编码（可选）<input name="typeCode" maxlength="64" pattern="[A-Za-z0-9_-]{2,64}" placeholder="例如：TRAINING；留空自动生成"/></label><button>新增类型</button><p id="type-state" role="status"></p><div id="type-list" class="management-list"><p class="hint">正在加载分类…</p></div></form>
+        </div>
+        <section class="card records"><div class="file-head"><div><h3>资料记录</h3><p class="hint">草稿解析完成后，点击“发布到下载”才会对可访问用户开放。</p></div><button id="refresh-records" class="btn-secondary" type="button">刷新记录</button></div><div id="management-records" class="management-list"><p class="hint">正在加载资料记录…</p></div></section>
+      </section>
+
+      <section id="downloads" class="panel active">
+        <div class="section-heading"><div><h2>资料下载</h2><p>浏览已发布资料，按分类筛选并下载当前版本。</p></div></div>
+        <section class="download-search" aria-labelledby="download-search-title"><div><h3 id="download-search-title">搜索资料</h3><p>输入产品名称、型号、参数或正文关键词；结果仅展示最相关的资料。</p></div><form id="search-form" class="search-form"><input id="search-query" type="search" maxlength="500" placeholder="例如：P110 产品的最大工作压力" required/><button class="btn-primary">搜索资料</button></form><div id="search-state" class="search-state" role="status" aria-live="polite">输入关键词即可在已发布资料中检索。</div><div id="search-results" class="list" hidden></div></section>
+        <div id="filters" class="filters" aria-label="资料分类"></div>
+        <div id="download-list" class="download-list"><article class="empty"><h3>正在加载资料</h3><p>请稍候。</p></article></div>
+      </section>
+    </section>
+  </main>
+  <script type="module" src="app.js?v=20260814-13"></script>
+</body>
+</html>

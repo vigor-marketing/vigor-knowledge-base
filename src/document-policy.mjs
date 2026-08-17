@@ -9,6 +9,8 @@ export const allowedFiles = new Map([
   ['application/vnd.openxmlformats-officedocument.presentationml.presentation', ['.pptx']],
   ['text/plain', ['.txt', '.md']],
 ])
+export const mimeTypeByExtension = new Map([...allowedFiles.entries()].flatMap(([mimeType, extensions]) => extensions.map(extension => [extension, mimeType])))
+export const allowedCommentAttachments = new Map([...allowedFiles, ['image/jpeg', ['.jpg', '.jpeg']], ['image/png', ['.png']], ['image/webp', ['.webp']]])
 
 export const createDocumentMetadata = z.object({
   documentType: z.string().trim().min(1).max(64),
@@ -32,9 +34,18 @@ export function allowedSecurityLevels(actor) {
 
 export function validateUploadFile({ filename, mimetype, bytes }, maxUploadBytes) {
   const extension = extname(filename || '').toLowerCase()
-  const extensions = allowedFiles.get(mimetype)
-  if (!extensions || !extensions.includes(extension)) return { ok: false, code: 'UNSUPPORTED_FILE_TYPE' }
+  const expectedMimeType = mimeTypeByExtension.get(extension)
+  const suppliedMimeType = String(mimetype || '').toLowerCase()
+  const browserGenericMimeType = !suppliedMimeType || suppliedMimeType === 'application/octet-stream' || suppliedMimeType === 'binary/octet-stream'
+  if (!expectedMimeType || (!browserGenericMimeType && suppliedMimeType !== expectedMimeType)) return { ok: false, code: 'UNSUPPORTED_FILE_TYPE' }
   if (!Number.isSafeInteger(bytes) || bytes <= 0) return { ok: false, code: 'EMPTY_FILE' }
   if (bytes > maxUploadBytes) return { ok: false, code: 'FILE_TOO_LARGE' }
+  return { ok: true, mimeType: expectedMimeType }
+}
+export function validateCommentAttachment({ filename, mimetype, bytes }, maxUploadBytes) {
+  const extension = extname(filename || '').toLowerCase(); const extensions = allowedCommentAttachments.get(mimetype)
+  if (!extensions || !extensions.includes(extension)) return { ok: false, code: 'UNSUPPORTED_ATTACHMENT_TYPE' }
+  if (!Number.isSafeInteger(bytes) || bytes <= 0) return { ok: false, code: 'EMPTY_ATTACHMENT' }
+  if (bytes > Math.min(maxUploadBytes, 10 * 1024 * 1024)) return { ok: false, code: 'ATTACHMENT_TOO_LARGE' }
   return { ok: true }
 }

@@ -37,6 +37,35 @@ export class DocumentRepository {
     }
   }
 
+  async createVersion({ documentId, uploaded, originalFilename, mimeType, actorId }) {
+    const connection = await this.pool.getConnection()
+    try {
+      await connection.beginTransaction()
+      const [documents] = await connection.execute('SELECT document_id AS documentId FROM knowledge_documents WHERE document_id = ? FOR UPDATE', [documentId])
+      if (!documents[0]) throw new Error('DOCUMENT_NOT_FOUND')
+      const [counts] = await connection.execute('SELECT COUNT(*) AS versionCount FROM knowledge_document_versions WHERE document_id = ?', [documentId])
+      const versionLabel = `v${Number(counts[0].versionCount) + 1}`
+      await connection.execute(
+        `INSERT INTO knowledge_document_versions
+          (version_id, document_id, version_label, object_key, content_hash, original_filename, mime_type, byte_size, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [uploaded.versionId, documentId, versionLabel, uploaded.objectKey, uploaded.contentHash, originalFilename, mimeType, uploaded.byteSize, actorId],
+      )
+      await connection.execute("UPDATE knowledge_documents SET current_version_id = ?, status = 'draft' WHERE document_id = ?", [uploaded.versionId, documentId])
+      const jobId = `kjob_${randomUUID()}`
+      await connection.execute('INSERT INTO knowledge_ingestion_jobs (job_id, version_id) VALUES (?, ?)', [jobId, uploaded.versionId])
+      await connection.commit()
+      return { documentId, versionId: uploaded.versionId, versionLabel, jobId, status: 'draft', parsingStatus: 'pending' }
+    } catch (error) {
+      await connection.rollback()
+      // content_hash 唯一约束兜底（并发上传同一文件时的竞态），转成可识别错误。
+      if (error.code === 'ER_DUP_ENTRY') throw new Error('DUPLICATE_FILE')
+      throw error
+    } finally {
+      connection.release()
+    }
+  }
+
   async findVersionByHash(contentHash) {
     const [rows] = await this.pool.execute(
       `SELECT version.document_id AS documentId, version.version_id AS versionId, document.title AS title, document.status AS status
@@ -60,22 +89,11 @@ export class DocumentRepository {
     return rows[0]
   }
 
-  async listDownloadableDocuments() {
-    const [rows] = await this.pool.execute(
-      `SELECT document.document_id AS documentId, document.title AS title, document.document_type AS documentType,
-              document.security_level AS securityLevel, version.version_label AS versionLabel,
-              document.updated_at AS updatedAt
-       FROM knowledge_documents document
-       JOIN knowledge_document_versions version ON version.version_id = document.current_version_id
-       WHERE document.status = 'active'
-       ORDER BY document.updated_at DESC`,
-    )
-    return rows
-  }
-
   async getDownloadableDocument(documentId) {
     const [rows] = await this.pool.execute(
-      `SELECT version.object_key AS objectKey, document.security_level AS securityLevel
+      `SELECT version.object_key AS objectKey, version.original_filename AS originalFilename,
+              version.mime_type AS mimeType, version.byte_size AS byteSize,
+              document.security_level AS securityLevel
        FROM knowledge_documents document
        JOIN knowledge_document_versions version ON version.version_id = document.current_version_id
        WHERE document.document_id = ? AND document.status = 'active'`,
@@ -175,4 +193,124 @@ export class DocumentRepository {
     const [result] = await this.pool.execute("UPDATE knowledge_documents SET status = 'archived' WHERE document_id = ?", [documentId])
     if (!result.affectedRows) throw new Error('DOCUMENT_NOT_FOUND')
   }
+
+  async restoreDocument(documentId) {
+    const [result] = await this.pool.execute("UPDATE knowledge_documents SET status = 'active' WHERE document_id = ? AND status = 'archived'", [documentId])
+    if (!result.affectedRows) throw new Error('ARCHIVED_DOCUMENT_NOT_FOUND')
+    return { documentId }
+  }
+
+  async listDocumentTypes() {
+    const [rows] = await this.pool.execute('SELECT type_code AS typeCode, display_name AS displayName, parent_type_code AS parentTypeCode FROM knowledge_document_types WHERE is_active = TRUE ORDER BY sort_order, display_name')
+    return rows
+  }
+
+  async createDocumentType({ typeCode, displayName, parentTypeCode = null }) {
+    if (parentTypeCode) {
+      const [parents] = await this.pool.execute('SELECT type_code FROM knowledge_document_types WHERE type_code = ? AND is_active = TRUE', [parentTypeCode])
+      if (!parents.length) throw new Error('PARENT_TYPE_NOT_FOUND')
+    }
+    await this.pool.execute('INSERT INTO knowledge_document_types (type_code, display_name, parent_type_code, sort_order) VALUES (?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM (SELECT sort_order FROM knowledge_document_types) AS types))', [typeCode, displayName, parentTypeCode])
+    return { typeCode, displayName, parentTypeCode }
+  }
+
+  async deactivateDocumentType(typeCode) {
+    const [children] = await this.pool.execute('SELECT type_code FROM knowledge_document_types WHERE parent_type_code = ? AND is_active = TRUE LIMIT 1', [typeCode])
+    if (children.length) throw new Error('TYPE_HAS_ACTIVE_CHILDREN')
+    const [result] = await this.pool.execute('UPDATE knowledge_document_types SET is_active = FALSE WHERE type_code = ? AND is_active = TRUE', [typeCode])
+    if (!result.affectedRows) throw new Error('TYPE_NOT_FOUND')
+  }
+
+  async renameDocumentType({ typeCode, displayName }) {
+    const [result] = await this.pool.execute('UPDATE knowledge_document_types SET display_name = ? WHERE type_code = ? AND is_active = TRUE', [displayName, typeCode])
+    if (!result.affectedRows) throw new Error('TYPE_NOT_FOUND')
+    return { typeCode, displayName }
+  }
+
+  async listDownloadDocuments(typeCode, securityLevels = ['public', 'internal', 'confidential', 'restricted']) {
+    const params = []
+    let where = "WHERE document.status = 'active'"
+    if (typeCode) { where += ' AND document.document_type = ?'; params.push(typeCode) }
+    where += ` AND document.security_level IN (${securityLevels.map(() => '?').join(', ')})`
+    params.push(...securityLevels)
+    const [rows] = await this.pool.execute(
+      `SELECT document.document_id AS documentId, document.title, document.document_type AS documentType,
+              COALESCE(type.display_name, document.document_type) AS documentTypeName,
+              version.version_label AS versionLabel, version.original_filename AS originalFilename,
+              version.created_at AS updatedAt
+       FROM knowledge_documents document
+       JOIN knowledge_document_versions version ON version.version_id = document.current_version_id
+       LEFT JOIN knowledge_document_types type ON type.type_code = document.document_type
+       ${where} ORDER BY version.created_at DESC`, params)
+    return rows
+  }
+  async keywordSearch(query, limit = 20, securityLevels = ['public', 'internal', 'confidential', 'restricted']) {
+    const raw = query.trim()
+    const compact = raw.toLowerCase().replace(/[\s_\-./，。；;、！？!?：:（）()【】\[\]]/g, '')
+    const latinTerms = raw.match(/[a-z0-9][a-z0-9._/-]*/gi) || []
+    const chineseTerms = (raw.match(/[\u4e00-\u9fff]{2,}/g) || []).flatMap(value => [value, ...Array.from({ length: Math.max(value.length - 1, 0) }, (_, index) => value.slice(index, index + 2))])
+    const terms = [...new Set([raw, compact, ...raw.split(/[\s,，。；;、！？!?的了是和与及在]/).map(term => term.trim()), ...latinTerms, ...chineseTerms].filter(term => term.length >= 2))].slice(0, 20)
+    if (!terms.length) return []
+    const normalizedContent = "LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(chunk.content, ' ', ''), '-', ''), '_', ''), '/', ''), '.', ''), '，', ''), '。', ''), '：', ''))"
+    const normalizedTitle = "LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(document.title, ' ', ''), '-', ''), '_', ''), '/', ''), '.', ''), '，', ''), '。', ''), '：', ''))"
+    const where = terms.map(() => `(chunk.content LIKE ? OR document.title LIKE ? OR ${normalizedContent} LIKE ? OR ${normalizedTitle} LIKE ?)`).join(' OR ')
+    const values = [...securityLevels, ...terms.flatMap(term => { const normalized = term.toLowerCase().replace(/[\s_\-./，。；;、！？!?：:（）()【】\[\]]/g, ''); return [`%${term}%`, `%${term}%`, `%${normalized}%`, `%${normalized}%`] })]
+    const securityPlaceholders = securityLevels.map(() => '?').join(', ')
+    const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 50)
+    const [rows] = await this.pool.execute(`SELECT MIN(chunk.chunk_id) AS chunkId, document.document_id AS documentId, chunk.version_id AS versionId, document.title, document.document_type AS documentType, version.original_filename AS originalFilename, 1 AS score FROM knowledge_document_chunks chunk JOIN knowledge_document_versions version ON version.version_id = chunk.version_id JOIN knowledge_documents document ON document.document_id = version.document_id WHERE document.status = 'active' AND document.security_level IN (${securityPlaceholders}) AND version.version_id = document.current_version_id AND (${where}) GROUP BY document.document_id, chunk.version_id, document.title, document.document_type, version.original_filename, document.updated_at ORDER BY document.updated_at DESC LIMIT ${safeLimit}`, values)
+    return rows
+  }
+
+  // Search snippets are intentionally separate from keywordSearch(): the latter
+  // powers the file-card UI and must not send document bodies to the browser.
+  async keywordSearchSources(query, limit = 5, securityLevels = ['public', 'internal', 'confidential', 'restricted']) {
+    const raw = query.trim()
+    const compact = raw.toLowerCase().replace(/[\s_\-./，。；;、！？!?：:（）()【】\[\]]/g, '')
+    const latinTerms = raw.match(/[a-z0-9][a-z0-9._/-]*/gi) || []
+    const chineseTerms = (raw.match(/[\u4e00-\u9fff]{2,}/g) || []).flatMap(value => [value, ...Array.from({ length: Math.max(value.length - 1, 0) }, (_, index) => value.slice(index, index + 2))])
+    const terms = [...new Set([raw, compact, ...raw.split(/[\s,，。；;、！？!?的了是和与及在]/).map(term => term.trim()), ...latinTerms, ...chineseTerms].filter(term => term.length >= 2))].slice(0, 20)
+    if (!terms.length) return []
+    const normalizedContent = "LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(chunk.content, ' ', ''), '-', ''), '_', ''), '/', ''), '.', ''), '，', ''), '。', ''), '：', ''))"
+    const normalizedTitle = "LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(document.title, ' ', ''), '-', ''), '_', ''), '/', ''), '.', ''), '，', ''), '。', ''), '：', ''))"
+    const where = terms.map(() => `(chunk.content LIKE ? OR document.title LIKE ? OR ${normalizedContent} LIKE ? OR ${normalizedTitle} LIKE ?)`).join(' OR ')
+    const values = [...securityLevels, ...terms.flatMap(term => { const normalized = term.toLowerCase().replace(/[\s_\-./，。；;、！？!?：:（）()【】\[\]]/g, ''); return [`%${term}%`, `%${term}%`, `%${normalized}%`, `%${normalized}%`] })]
+    const securityPlaceholders = securityLevels.map(() => '?').join(', ')
+    const safeLimit = Math.min(Math.max(Number(limit) || 5, 1), 20)
+    const [rows] = await this.pool.execute(`SELECT chunk.chunk_id AS chunkId, document.document_id AS documentId, chunk.version_id AS versionId, document.title, document.document_type AS documentType, version.original_filename AS originalFilename, chunk.heading_path AS headingPath, chunk.content, 1 AS score FROM knowledge_document_chunks chunk JOIN knowledge_document_versions version ON version.version_id = chunk.version_id JOIN knowledge_documents document ON document.document_id = version.document_id WHERE document.status = 'active' AND document.security_level IN (${securityPlaceholders}) AND version.version_id = document.current_version_id AND (${where}) ORDER BY document.updated_at DESC, chunk.ordinal ASC LIMIT ${safeLimit}`, values)
+    return rows.filter(row => String(row.content || '').trim())
+  }
+
+  async listManageableDocuments() {
+    const [rows] = await this.pool.execute(
+      `SELECT document.document_id AS documentId, document.title, document.document_type AS documentType, document.status,
+              version.version_label AS versionLabel, version.created_at AS updatedAt
+       FROM knowledge_documents document
+       JOIN knowledge_document_versions version ON version.version_id = document.current_version_id
+       WHERE document.status IN ('draft', 'review', 'approved', 'active', 'obsolete', 'archived')
+       ORDER BY document.updated_at DESC`,
+    )
+    return rows
+  }
+
+  async listComments(documentId) {
+    const [comments] = await this.pool.execute('SELECT comment.comment_id AS commentId, comment.parent_comment_id AS parentCommentId, comment.comment_kind AS commentKind, comment.content, comment.created_by AS createdBy, comment.author_name AS authorName, comment.created_at AS createdAt FROM knowledge_document_comments comment LEFT JOIN knowledge_document_comments parent ON parent.comment_id = comment.parent_comment_id WHERE comment.document_id = ? ORDER BY COALESCE(parent.created_at, comment.created_at) DESC, comment.parent_comment_id IS NOT NULL ASC, comment.created_at ASC', [documentId])
+    if (!comments.length) return comments
+    const ids = comments.map(row => row.commentId); const placeholders = ids.map(() => '?').join(',')
+    const [attachments] = await this.pool.execute(`SELECT attachment_id AS attachmentId, comment_id AS commentId, original_filename AS originalFilename, mime_type AS mimeType, byte_size AS byteSize FROM knowledge_comment_attachments WHERE comment_id IN (${placeholders}) ORDER BY created_at`, ids)
+    const [mentions] = await this.pool.execute(`SELECT comment_id AS commentId, mention_value AS mentionValue FROM knowledge_comment_mentions WHERE comment_id IN (${placeholders}) ORDER BY created_at`, ids)
+    return comments.map(comment => ({ ...comment, attachments: attachments.filter(item => item.commentId === comment.commentId), mentions: mentions.filter(item => item.commentId === comment.commentId).map(item => item.mentionValue) }))
+  }
+
+  async createComment({ documentId, parentCommentId = null, kind, content, actorId, authorName }) {
+    const commentId = `kcom_${randomUUID()}`
+    if (parentCommentId) {
+      const [parents] = await this.pool.execute('SELECT comment_id FROM knowledge_document_comments WHERE comment_id = ? AND document_id = ? AND parent_comment_id IS NULL', [parentCommentId, documentId])
+      if (!parents[0]) throw new Error('PARENT_COMMENT_NOT_FOUND')
+    }
+    await this.pool.execute('INSERT INTO knowledge_document_comments (comment_id, document_id, parent_comment_id, comment_kind, content, created_by, author_name) VALUES (?, ?, ?, ?, ?, ?, ?)', [commentId, documentId, parentCommentId, kind, content, actorId, authorName])
+    return { commentId, documentId, parentCommentId, kind, content, createdBy: actorId, authorName }
+  }
+  async addCommentAttachment({ attachmentId, commentId, uploaded, originalFilename, mimeType }) { await this.pool.execute('INSERT INTO knowledge_comment_attachments (attachment_id, comment_id, object_key, original_filename, mime_type, byte_size) VALUES (?, ?, ?, ?, ?, ?)', [attachmentId, commentId, uploaded.objectKey, originalFilename, mimeType, uploaded.byteSize]); return { attachmentId, originalFilename, mimeType, byteSize: uploaded.byteSize } }
+  async addCommentMentions({ commentId, mentions }) { for (const mention of [...new Set(mentions)].slice(0, 20)) await this.pool.execute('INSERT INTO knowledge_comment_mentions (comment_id, mention_value) VALUES (?, ?)', [commentId, mention]) }
+  async getCommentAttachment(attachmentId) { const [rows] = await this.pool.execute("SELECT attachment.object_key AS objectKey FROM knowledge_comment_attachments attachment JOIN knowledge_document_comments comment ON comment.comment_id = attachment.comment_id JOIN knowledge_documents document ON document.document_id = comment.document_id WHERE attachment.attachment_id = ? AND document.status <> 'archived'", [attachmentId]); return rows[0] }
 }

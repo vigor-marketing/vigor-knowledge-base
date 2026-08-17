@@ -13,7 +13,7 @@ if (!config.redisUrl || !config.mysqlUrl || !config.cos) throw new Error('Worker
 const connection = new IORedis(config.redisUrl, { maxRetriesPerRequest: null })
 const storage = new CosStorage(config.cos)
 const repository = new DocumentRepository(config.mysqlUrl)
-const embeddings = config.search ? new EmbeddingClient({ url: config.search.embeddingUrl, apiKey: config.search.embeddingApiKey, model: config.search.embeddingModel, dimensions: config.search.embeddingDimensions }) : undefined
+const embeddings = config.search ? new EmbeddingClient({ url: config.search.embeddingUrl, apiKey: config.search.embeddingApiKey, model: config.search.embeddingModel, dimensions: config.search.embeddingDimensions, hunyuan: config.search.hunyuan }) : undefined
 const searchIndex = config.search ? new SearchIndex({ node: config.search.node, apiKey: config.search.apiKey, indexName: config.search.indexName, dimensions: config.search.embeddingDimensions }) : undefined
 if (searchIndex) await searchIndex.ensureMapping()
 
