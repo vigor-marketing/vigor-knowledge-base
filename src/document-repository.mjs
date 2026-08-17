@@ -29,10 +29,24 @@ export class DocumentRepository {
       return { documentId, versionId: uploaded.versionId, jobId, status: 'draft', parsingStatus: 'pending' }
     } catch (error) {
       await connection.rollback()
+      // content_hash 唯一约束兜底（并发上传同一文件时的竞态），转成可识别错误。
+      if (error.code === 'ER_DUP_ENTRY') throw new Error('DUPLICATE_FILE')
       throw error
     } finally {
       connection.release()
     }
+  }
+
+  async findVersionByHash(contentHash) {
+    const [rows] = await this.pool.execute(
+      `SELECT version.document_id AS documentId, version.version_id AS versionId, document.title AS title, document.status AS status
+       FROM knowledge_document_versions version
+       JOIN knowledge_documents document ON document.document_id = version.document_id
+       WHERE version.content_hash = ?
+       LIMIT 1`,
+      [contentHash],
+    )
+    return rows[0]
   }
 
   async getSourceForJob(jobId) {

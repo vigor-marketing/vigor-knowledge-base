@@ -161,11 +161,17 @@ app.post('/api/v1/documents', async (request, reply) => {
       const status = code === 'FILE_TOO_LARGE' ? 413 : 422
       return reply.code(status).send({ error: { code, message: 'The uploaded file does not meet the knowledge base policy.' } })
     }
+    const duplicate = await repository.findVersionByHash(uploaded.contentHash)
+    if (duplicate) {
+      await storage.deleteSource(uploaded.objectKey)
+      return reply.code(409).send({ error: { code: 'DUPLICATE_FILE', message: `该文件内容已存在（资料：${duplicate.title}，ID：${duplicate.documentId}），请勿重复上传。` } })
+    }
     const created = await repository.createDraft({ documentId, metadata: parsedMetadata.data, uploaded, originalFilename: file.filename, mimeType: file.mimetype, actorId: actor.personId })
     await ingestionQueue.enqueue(created)
     return reply.code(201).send({ data: created })
   } catch (error) {
     if (uploaded) await storage.deleteSource(uploaded.objectKey).catch(() => undefined)
+    if (error.message === 'DUPLICATE_FILE') return reply.code(409).send({ error: { code: 'DUPLICATE_FILE', message: '该文件内容已存在，请勿重复上传。' } })
     request.log.error(error, 'document upload failed')
     return reply.code(500).send({ error: { code: 'INGESTION_FAILED', message: 'Document ingestion failed.' } })
   }
