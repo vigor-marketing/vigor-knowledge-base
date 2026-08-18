@@ -247,7 +247,7 @@ html.workbench-embedded .sidebar .side-note{color:#aaa}
 .category-nav-h .category-hcol button.level-1.active{color:#d92d20;font-weight:600}
 
 /* KNOWLEDGE_NAV_VERTICAL_V21: one category per row in sidebar */
-.category-nav-h{display:grid;grid-template-columns:1fr;gap:8px;max-height:calc(100vh - 320px);overflow-y:auto}
+.category-nav-h{display:grid!important;grid-template-columns:1fr!important;gap:8px;max-height:calc(100vh - 320px);overflow-y:auto}
 .category-nav-h .category-hcol{display:grid;gap:2px}
 .category-nav-h .category-hcol button{display:block;width:100%;padding:7px 10px;border:0;background:transparent;color:#333;text-align:left;font-size:15px;font-weight:600;border-radius:6px;cursor:pointer;white-space:nowrap}
 .category-nav-h .category-hcol button:hover{background:#f6f6f6;color:#1f1f23}
