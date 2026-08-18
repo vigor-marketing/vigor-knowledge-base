@@ -112,7 +112,7 @@ async function loadTypes() {
   $('#record-type-filter').innerHTML = '<option value="">全部资料</option>' + state.types.map(type => `<option value="${escapeHtml(type.typeCode)}">${escapeHtml(categoryOptionLabel(type))}</option>`).join('')
   if (state.activeType && !state.types.some(type => type.typeCode === state.activeType)) state.activeType = ''
   if (!state.activeType) { const root = childTypes('')[0]?.typeCode || state.types[0]?.typeCode || ''; const children = childTypes(root); state.activeType = children.length ? children[0].typeCode : root }
-  renderCategoryBlocks()
+  renderCategoryTree()
   renderTypeList()
   setMessage('#service-status', '资料服务已就绪')
 }
@@ -192,33 +192,37 @@ function syncUploadMode() {
     setMessage('#upload-state', '')
   }
 }
-// 左侧分类树：一级分类可展开子分类，点击直接选中并在右侧显示文件，无页面跳转感。
-// 组织架构式分类小方块：一级方块在上，二级方块缩进排在下方，始终可见、点击选中。
-function renderCategoryBlocks() {
-  const container = $('#category-blocks')
+// 侧边导航栏分类：一级分类为导航条目，二级缩进排在下方，全部可见、点击选中并切换下载面板。
+function renderCategoryTree() {
+  const container = $('#category-nav')
   if (!container) return
   const roots = childTypes('')
   if (!roots.length) { container.innerHTML = '<p class="hint">暂无可用资料分类。</p>'; return }
-  const renderBlock = (type, level) => {
+  const renderItem = (type, level) => {
     const count = countFilesForType(type.typeCode)
     const isActive = type.typeCode === state.activeType
-    return `<button type="button" class="category-block level-${level} ${isActive ? 'active' : ''}" data-type="${escapeHtml(type.typeCode)}" data-level="${level}"><span class="category-block-name">${escapeHtml(type.displayName)}</span><span class="category-block-count">${count} 份</span></button>`
+    return `<button type="button" class="category-nav-item level-${level} ${isActive ? 'active' : ''}" data-type="${escapeHtml(type.typeCode)}" data-level="${level}"><span class="category-nav-dot"></span><span class="category-nav-name">${escapeHtml(type.displayName)}</span>${count ? `<span class="category-nav-count">${count}</span>` : ''}</button>`
   }
-  container.innerHTML = roots.map(root => {
-    const children = childTypes(root.typeCode)
-    return `<div class="category-block-group">${renderBlock(root, 0)}${children.length ? `<div class="category-block-children">${children.map(child => renderBlock(child, 1)).join('')}</div>` : ''}</div>`
-  }).join('')
-  container.querySelectorAll('.category-block').forEach(block => block.addEventListener('click', () => {
-    state.activeType = block.dataset.type
+  container.innerHTML = roots.map(root => `${renderItem(root, 0)}${childTypes(root.typeCode).map(child => renderItem(child, 1)).join('')}`).join('')
+  container.querySelectorAll('.category-nav-item').forEach(item => item.addEventListener('click', () => {
+    state.activeType = item.dataset.type
     state.activeDocumentId = ''
-    renderCategoryBlocks()
+    showDownloadsPanel()
+    renderCategoryTree()
     renderDownloads()
   }))
+}
+// 切换到「资料下载」面板（供侧边分类点击时使用）。
+function showDownloadsPanel() {
+  document.querySelectorAll('.nav').forEach(node => node.classList.toggle('active', node.dataset.panel === 'downloads'))
+  document.querySelectorAll('.panel').forEach(node => node.classList.toggle('active', node.id === 'downloads'))
+  $('#page-title').textContent = '资料下载'
+  $('#page-description').textContent = '搜索、筛选并下载已发布的企业资料。'
 }
 // 下载页：一次拉取全部已发布资料，分类切换与文件选择都在前端完成，避免重复请求。
 async function loadDownloads() {
   try { state.allDownloads = await api('/v1/documents') } catch (error) { const list = $('#download-list'); list.innerHTML = `<article class="empty"><h3>无法读取资料</h3><p>${escapeHtml(error.message)}</p></article>`; return }
-  renderCategoryBlocks()
+  renderCategoryTree()
   renderDownloads()
 }
 function renderDownloads() {

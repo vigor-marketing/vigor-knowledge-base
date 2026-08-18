@@ -73,3 +73,20 @@ html.workbench-embedded .shell{display:grid;grid-template-columns:210px minmax(0
 .download-split{display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);gap:16px;align-items:start}.download-file-list{display:grid;gap:12px;padding:16px;border:1px solid #e2e8f0;border-radius:16px;background:#fff;box-shadow:0 1px 2px rgba(15,23,42,.03)}.download-file-list .download-category__head{padding-bottom:12px}.download-file-options{display:grid;gap:6px;max-height:min(62vh,560px);overflow-y:auto;padding-right:2px}.download-file-option{min-height:0!important;padding:10px 12px!important}.download-file-option strong{font-size:14px!important}
 .download-file-detail{border:1px solid #e2e8f0;border-radius:16px;background:#fff;box-shadow:0 1px 2px rgba(15,23,42,.03)}.download-file-detail:empty{display:none}.download-file-detail .file-card{border:0;box-shadow:none;padding:20px}
 @media(max-width:900px){.download-split{grid-template-columns:1fr}.download-file-options{max-height:none}}
+
+/* KNOWLEDGE_NAV_CATEGORIES_V14: categories as prominent sidebar nav items */
+.sidebar-section{margin-top:26px;min-height:0;display:flex;flex-direction:column;flex:1}
+.sidebar-label{margin:0 4px 10px;color:#8ba2b2;font-size:11px;font-weight:700;letter-spacing:.08em}
+.category-nav{display:grid;gap:4px;overflow-y:auto;padding-right:4px;max-height:calc(100vh - 330px)}
+.category-nav-item{display:flex;align-items:center;gap:9px;width:100%;padding:10px 12px;border:1px solid transparent;border-radius:9px;background:transparent;color:#c4d5e0;text-align:left;cursor:pointer;min-width:0}
+.category-nav-item:hover{background:#233b4b;color:#fff}
+.category-nav-item.active{background:#2b6cb0;color:#fff;border-color:#3b82f6;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.category-nav-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:#5b7e96}
+.category-nav-item:hover .category-nav-dot{background:#a8c3d6}
+.category-nav-item.active .category-nav-dot{background:#fff}
+.category-nav-item.level-1{padding-left:30px;color:#9db4c4;font-size:14px}
+.category-nav-item.level-1 .category-nav-dot{width:6px;height:6px;background:#41637c}
+.category-nav-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;font-size:15px}
+.category-nav-item.level-1 .category-nav-name{font-weight:500;font-size:14px}
+.category-nav-count{margin-left:auto;flex:0 0 auto;padding:1px 7px;border-radius:999px;background:rgba(255,255,255,.14);color:#dce8f2;font-size:11px;font-weight:700}
+.category-nav-item.active .category-nav-count{background:rgba(255,255,255,.24)}
