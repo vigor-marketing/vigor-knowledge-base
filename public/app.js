@@ -147,11 +147,12 @@ async function loadManageableDocuments() {
     $('#management-records').innerHTML = `<p class="error">${escapeHtml(error.message)}</p>`
   }
 }
+const recordStatusLabels = { draft: '草稿', review: '待审核', approved: '已批准', active: '已发布', obsolete: '已停用', archived: '已归档' }
 function renderManagementRecords() {
   const list = $('#management-records')
   const filter = $('#record-type-filter')?.value || ''
   const visible = state.manageable.filter(document => !filter || document.documentType === filter)
-  list.innerHTML = visible.length ? visible.map(document => `<article class="manage-row record ${document.status === 'archived' ? 'archived-record' : ''}"><div><b>${escapeHtml(document.title)}</b><p class="hint ${document.status === 'archived' ? 'record-status' : ''}">${escapeHtml(typeLabel(document.documentType))} · ${escapeHtml(document.versionLabel)} · ${document.status === 'archived' ? '已归档（不可下载）' : escapeHtml(document.status)} · 更新于 ${formatDate(document.updatedAt)}</p></div><div class="record-actions">${document.status === 'draft' ? `<button class="publish-document" data-document-id="${escapeHtml(document.documentId)}" type="button">发布到下载</button>` : ''}${document.status === 'archived' ? `<button class="restore-document" data-document-id="${escapeHtml(document.documentId)}" type="button">重新启用</button>` : `<button class="update-document" data-document-id="${escapeHtml(document.documentId)}" type="button">更新版本</button><button class="archive-document" data-document-id="${escapeHtml(document.documentId)}" type="button">归档</button>`}</div></article>`).join('') : (state.manageable.length ? '<p class="hint">该分类下暂无资料记录。</p>' : '<p class="hint">暂无资料记录。</p>')
+  list.innerHTML = visible.length ? `<div class="record-table">${visible.map(document => `<div class="record-row ${document.status === 'archived' ? 'archived' : ''}"><div class="record-title" title="${escapeHtml(document.title)}">${escapeHtml(document.title)}</div><span class="record-status status-${document.status}">${recordStatusLabels[document.status] || document.status}</span><span class="record-version">${escapeHtml(document.versionLabel)}</span><span class="record-time">${formatDate(document.updatedAt)}</span><div class="record-actions">${document.status === 'draft' ? `<button class="publish-document" data-document-id="${escapeHtml(document.documentId)}" type="button">发布</button>` : ''}${document.status === 'archived' ? `<button class="restore-document" data-document-id="${escapeHtml(document.documentId)}" type="button">重新启用</button>` : `<button class="update-document" data-document-id="${escapeHtml(document.documentId)}" type="button">更新</button><button class="archive-document" data-document-id="${escapeHtml(document.documentId)}" type="button">归档</button>`}</div></div>`).join('')}</div>` : (state.manageable.length ? '<p class="hint">该分类下暂无资料记录。</p>' : '<p class="hint">暂无资料记录。</p>')
   list.querySelectorAll('.publish-document').forEach(button => button.addEventListener('click', () => publishDocument(button.dataset.documentId)))
   list.querySelectorAll('.update-document').forEach(button => button.addEventListener('click', () => { $('#existing-document').value = button.dataset.documentId; syncUploadMode(); $('#upload-form').scrollIntoView({ block: 'start', behavior: 'smooth' }); $('#upload-form').querySelector('input[type="file"]').focus() }))
   list.querySelectorAll('.archive-document').forEach(button => button.addEventListener('click', () => archiveDocument(button.dataset.documentId)))
@@ -203,6 +204,14 @@ function renderCategoryTree() {
   container.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
     state.activeType = btn.dataset.type
     state.activeDocumentId = ''
+    // 与资料下载一致的分栏管理：在管理页点分类则筛选该分类的记录，在下载页则显示该分类文件。
+    const managing = document.querySelector('.panel.active')?.id === 'manage'
+    if (managing) {
+      const filter = $('#record-type-filter'); if (filter) filter.value = btn.dataset.type
+      renderCategoryTree()
+      renderManagementRecords()
+      return
+    }
     showDownloadsPanel()
     renderCategoryTree()
     renderDownloads()
