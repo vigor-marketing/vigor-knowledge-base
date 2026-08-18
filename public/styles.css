@@ -235,3 +235,13 @@ html.workbench-embedded .sidebar .side-note{color:#aaa}
 .category-hcol button.level-1{color:#888;font-size:13px;font-weight:400;padding-left:22px}
 .category-hcol button.level-1.active{color:#d92d20;font-weight:600}
 @media(max-width:900px){.category-hbar{gap:10px 24px;padding:12px 14px}}
+
+/* KNOWLEDGE_NAV_HORIZONTAL_V20: categories in sidebar as horizontal columns */
+.sidebar-section{margin-top:26px}.sidebar-label{color:#999;font-size:11px;letter-spacing:.1em;margin:0 4px 8px}
+.category-nav-h{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:flex-start;overflow-y:auto;max-height:calc(100vh - 320px);padding:2px}
+.category-nav-h .category-hcol{display:grid;gap:2px;min-width:0}
+.category-nav-h .category-hcol button{display:block;width:100%;padding:5px 8px;border:0;background:transparent;color:#333;text-align:left;font-size:14px;font-weight:600;border-radius:5px;cursor:pointer;white-space:nowrap}
+.category-nav-h .category-hcol button:hover{background:#f6f6f6;color:#1f1f23}
+.category-nav-h .category-hcol button.active{color:#d92d20;font-weight:700;background:transparent}
+.category-nav-h .category-hcol button.level-1{color:#888;font-size:12px;font-weight:400;padding-left:16px}
+.category-nav-h .category-hcol button.level-1.active{color:#d92d20;font-weight:600}

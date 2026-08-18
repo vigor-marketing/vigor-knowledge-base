@@ -192,9 +192,9 @@ function syncUploadMode() {
     setMessage('#upload-state', '')
   }
 }
-// 横向分类：一级分类横排成列，二级分类直接排在各自一级下方，纯文字、点击选中。
+// 导航栏内横向分类：一级分类并排成列，二级分类排在各自一级正下方，纯文字、点击选中。
 function renderCategoryTree() {
-  const container = $('#category-hbar')
+  const container = $('#category-nav')
   if (!container) return
   const roots = childTypes('')
   if (!roots.length) { container.innerHTML = '<p class="hint">暂无可用资料分类。</p>'; return }
