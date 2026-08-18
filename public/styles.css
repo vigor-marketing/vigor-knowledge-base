@@ -134,3 +134,16 @@ html.workbench-embedded .sidebar{background:#16161c;color:#b8b8c4}
 html.workbench-embedded .sidebar .nav,html.workbench-embedded .sidebar .nav:hover{color:#a8a8b4}
 html.workbench-embedded .sidebar .nav.active,html.workbench-embedded .sidebar .nav.active:hover{color:#f0524f;background:transparent;box-shadow:none}
 html.workbench-embedded .sidebar .nav b{color:#8f8f9c}
+
+/* KNOWLEDGE_MENU_SELECT_V16: icon+text menu with soft highlight (sales-commission style) */
+.sidebar{padding:20px 12px}.brand{gap:10px;font-size:19px;margin-bottom:28px}
+.nav{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;border-left:0!important}
+.nav b{width:22px;margin:0;color:inherit;font-size:16px}
+.nav.active{border-left:0;padding-left:12px;background:#fdf0ef;color:#b42318}
+.nav.active b{color:#d92d20}
+.category-nav-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;border-left:0!important}
+.category-nav-item.active{border-left:0;padding-left:12px;background:#fdf0ef;color:#b42318}
+.category-nav-item .category-nav-ico{width:18px;flex:0 0 18px;color:#8f8f9c;font-size:13px;text-align:center}
+.category-nav-item.active .category-nav-ico{color:#d92d20}
+.category-nav-item:hover{background:#232330;color:#fff}
+.category-nav-item.level-1{padding-left:28px}

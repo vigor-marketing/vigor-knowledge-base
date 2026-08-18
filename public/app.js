@@ -201,7 +201,8 @@ function renderCategoryTree() {
   const renderItem = (type, level) => {
     const count = countFilesForType(type.typeCode)
     const isActive = type.typeCode === state.activeType
-    return `<button type="button" class="category-nav-item level-${level} ${isActive ? 'active' : ''}" data-type="${escapeHtml(type.typeCode)}" data-level="${level}"><span class="category-nav-name">${escapeHtml(type.displayName)}</span>${count ? `<span class="category-nav-count">${count}</span>` : ''}</button>`
+    const icon = level === 0 ? '▦' : '·'
+    return `<button type="button" class="category-nav-item level-${level} ${isActive ? 'active' : ''}" data-type="${escapeHtml(type.typeCode)}" data-level="${level}"><span class="category-nav-ico">${icon}</span><span class="category-nav-name">${escapeHtml(type.displayName)}</span>${count ? `<span class="category-nav-count">${count}</span>` : ''}</button>`
   }
   container.innerHTML = roots.map(root => `${renderItem(root, 0)}${childTypes(root.typeCode).map(child => renderItem(child, 1)).join('')}`).join('')
   container.querySelectorAll('.category-nav-item').forEach(item => item.addEventListener('click', () => {
