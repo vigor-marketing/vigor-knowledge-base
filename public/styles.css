@@ -286,3 +286,9 @@ html.workbench-embedded .sidebar .side-note{color:#aaa}
 .record-actions{display:flex;gap:6px;justify-content:flex-end}
 .record-actions button{padding:5px 10px;font-size:12px}
 @media(max-width:820px){.record-row{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"title status" "time actions";gap:6px 10px}.record-version{display:none}.record-title{grid-area:title}.record-status{grid-area:status}.record-time{grid-area:time}.record-actions{grid-area:actions}}
+
+/* KNOWLEDGE_EMBED_VIEWPORT_V27: embedded iframe = viewport, inner scrolling */
+html.workbench-embedded .shell{height:100vh;min-height:0;overflow:hidden}
+html.workbench-embedded .sidebar{max-height:100vh;overflow-y:auto}
+html.workbench-embedded .content{height:100vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+html.workbench-embedded .content,html.workbench-embedded .shell{display:grid}

@@ -54,7 +54,9 @@ function categoryTrail(typeCode) {
 function categoryOptionLabel(type) { return `${'　'.repeat(Math.max(categoryTrail(type.typeCode).length - 1, 0))}${type.displayName}` }
 function syncEmbeddedHeight() {
   if (!EMBEDDED) return
-  const height = Math.ceil(Math.max(document.documentElement.scrollHeight, document.body.scrollHeight, document.documentElement.offsetHeight, document.body.offsetHeight))
+  // 嵌入时 iframe 高度固定为可视视口高度，页面内容在内部滚动。
+  // 这样 fixed 弹窗（预览/确认）相对屏幕视口居中，不再因 iframe 被内容撑高而偏移或留大段空白。
+  const height = window.innerHeight
   if (height === lastEmbeddedHeight) return
   lastEmbeddedHeight = height
   try {
@@ -304,5 +306,5 @@ $('#search-form').addEventListener('submit', async event => { event.preventDefau
 // 分类目录以平台鉴权后的 API 为唯一来源。每次新增、编辑或停用分类后
 // 都会调用 loadTypes()，因此不需要把分类写死在页面中。
 loadTypes().then(loadDownloads).catch(error => setMessage('#service-status', `无法加载资料类型：${error.message}`, true))
-if (EMBEDDED && 'ResizeObserver' in window) new ResizeObserver(syncEmbeddedHeight).observe(document.body)
+window.addEventListener('resize', syncEmbeddedHeight)
 window.addEventListener('load', syncEmbeddedHeight)
