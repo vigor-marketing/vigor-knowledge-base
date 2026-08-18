@@ -18,6 +18,60 @@ export function buildSnippet(content, terms) {
   return `${start > 0 ? '…' : ''}${text.slice(start, start + 100)}${start + 100 < text.length ? '…' : ''}`
 }
 
+const normalizeTerm = term => String(term || '').toLowerCase().replace(/[\s_\-./，。；;、！？!?：:（）()【】\[\]]/g, '')
+const countOccurrences = (text, term) => {
+  const value = String(text || '')
+  if (!value || !term) return 0
+  let count = 0
+  let index = 0
+  while ((index = value.indexOf(term, index)) !== -1) { count++; index += term.length }
+  return count
+}
+
+// 按文档聚合命中 chunk：相关度分 = 标题命中 ×5 + 全部命中文本的词频之和；
+// snippet/证据取该文档最高分 chunk。keepContent=true 时保留正文（供 AI 取证）。
+function aggregateSearchRows(rows, terms, keepContent = false) {
+  const aggregated = new Map()
+  for (const row of rows) {
+    const score = Number(row.score) || 0
+    const frequency = terms.reduce((sum, term) => sum + countOccurrences(row.content, term), 0)
+    const current = aggregated.get(row.documentId)
+    if (current) {
+      current.score += score
+      current.frequency += frequency
+      if (score > current.bestScore) {
+        current.bestScore = score
+        current.chunkId = row.chunkId
+        current.versionId = row.versionId
+        current.headingPath = row.headingPath
+        current.snippet = buildSnippet(row.content, terms)
+        if (keepContent) current.content = row.content
+      }
+    } else {
+      const titleHit = terms.some(term => String(row.title || '').toLowerCase().includes(term.toLowerCase()) || normalizeTerm(row.title).includes(normalizeTerm(term))) ? 1 : 0
+      aggregated.set(row.documentId, {
+        chunkId: row.chunkId,
+        documentId: row.documentId,
+        versionId: row.versionId,
+        title: row.title,
+        documentType: row.documentType,
+        originalFilename: row.originalFilename,
+        headingPath: row.headingPath,
+        snippet: buildSnippet(row.content, terms),
+        score,
+        bestScore: score,
+        frequency,
+        titleHit,
+        ...(keepContent ? { content: row.content } : {}),
+      })
+    }
+  }
+  return [...aggregated.values()]
+    .map(item => ({ ...item, rank: item.titleHit * 5 + item.frequency }))
+    .sort((a, b) => b.rank - a.rank || b.score - a.score || b.bestScore - a.bestScore)
+    .map(item => { const { bestScore, frequency, titleHit, rank, ...rest } = item; return { ...rest, score: rank } })
+}
+
 export class DocumentRepository {
   constructor(mysqlUrl, pool = mysql.createPool(mysqlUrl)) {
     this.pool = pool
@@ -284,7 +338,7 @@ export class DocumentRepository {
     if (!clauses) return []
     const { terms, where, scoreExpr, whereParams, scoreParams } = clauses
     const securityPlaceholders = securityLevels.map(() => '?').join(', ')
-    // SQL 按 chunk 取数；取足够多，去重后才能覆盖 limit 篇文档。
+    // SQL 按 chunk 取数；取足够多，聚合去重后才能覆盖 limit 篇文档。
     const safeLimit = Math.min(Math.max(Number(limit) * 20 || 100, 100), 300)
     const [rows] = await this.pool.execute(
       `SELECT chunk.chunk_id AS chunkId, document.document_id AS documentId, chunk.version_id AS versionId,
@@ -299,15 +353,7 @@ export class DocumentRepository {
        LIMIT ${safeLimit}`,
       [...scoreParams, ...securityLevels, ...whereParams],
     )
-    const results = []
-    const seen = new Set()
-    for (const row of rows) {
-      if (seen.has(row.documentId)) continue
-      seen.add(row.documentId)
-      results.push({ chunkId: row.chunkId, documentId: row.documentId, versionId: row.versionId, title: row.title, documentType: row.documentType, originalFilename: row.originalFilename, snippet: buildSnippet(row.content, terms), score: Number(row.score) })
-      if (results.length >= limit) break
-    }
-    return results
+    return aggregateSearchRows(rows, terms).slice(0, limit)
   }
 
   // 供 AI 回答取证的完整片段（含正文），按相关度排序、按文档去重后返回。
@@ -330,15 +376,7 @@ export class DocumentRepository {
        LIMIT ${safeLimit}`,
       [...scoreParams, ...securityLevels, ...whereParams],
     )
-    const results = []
-    const seen = new Set()
-    for (const row of rows) {
-      if (!String(row.content || '').trim() || seen.has(row.documentId)) continue
-      seen.add(row.documentId)
-      results.push({ ...row, score: Number(row.score) })
-      if (results.length >= limit) break
-    }
-    return results
+    return aggregateSearchRows(rows, terms, true).slice(0, limit)
   }
 
   async listManageableDocuments() {
