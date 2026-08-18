@@ -62,10 +62,11 @@ app.get(`${basePath}*`, async (request, reply) => {
   const filePath = candidate.startsWith(publicRoot) ? candidate : join(publicRoot, 'index.html')
   try {
     const contents = await readFile(filePath)
-    const isStaticAsset = ['.css', '.js'].includes(extname(filePath))
-    if (isStaticAsset) reply.header('cache-control', 'no-store, max-age=0')
+    // 内嵌应用静态资源（含 HTML）一律禁止缓存，保证界面更新即时可见。
+    reply.header('cache-control', 'no-store, max-age=0')
     return reply.type(contentTypes[extname(filePath)] || 'application/octet-stream').send(contents)
   } catch {
+    reply.header('cache-control', 'no-store, max-age=0')
     return reply.type('text/html; charset=utf-8').send(await readFile(join(publicRoot, 'index.html')))
   }
 })
