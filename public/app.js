@@ -225,7 +225,7 @@ function renderDownloads() {
   }))
   const selected = state.downloads.find(document => document.documentId === state.activeDocumentId)
   const holder = list.querySelector('.download-file-detail')
-  if (holder) holder.append(selected ? renderDocument(selected) : document.createElement('p'))
+  if (holder && selected) holder.append(renderDocument(selected))
 }
 function renderDocument(record) {
   const card = window.document.createElement('article'); card.className = 'file-card'; card.dataset.documentId = record.documentId
