@@ -37,3 +37,6 @@ html.workbench-embedded .sidebar nav{grid-template-columns:repeat(2,minmax(0,1fr
 
 /* KNOWLEDGE_DIALOG_CONTRAST_V8: destructive confirmation remains legible */
 .action-dialog__confirm.action-dialog__confirm{color:#fff!important}
+
+/* KNOWLEDGE_SEARCH_SMART_V9: relevance snippet and term highlighting */
+.search-snippet{margin:6px 0 0;color:#475569;font-size:13px;line-height:1.65;overflow-wrap:anywhere}.search-snippet mark,.search-file h3 mark{background:#fef3c7;color:#92400e;border-radius:3px;padding:0 2px;font-weight:700}

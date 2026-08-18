@@ -35,6 +35,16 @@ const actorFor = async request => {
 
 const contentTypes = { '.css': 'text/css; charset=utf-8', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8' }
 const actorName = actor => String(actor?.displayName || actor?.name || actor?.preferredUsername || actor?.personId || '资料库用户').slice(0, 128)
+const snippetOf = (text, query) => {
+  const value = String(text || '')
+  if (!value) return ''
+  const terms = [query, ...String(query).split(/[\s,，。；;、！？!?的了是和与及在]+/).filter(term => term.length >= 2)].filter(Boolean)
+  let bestIndex = -1
+  for (const term of terms) { const index = value.indexOf(term); if (index >= 0 && (bestIndex === -1 || index < bestIndex)) bestIndex = index }
+  if (bestIndex === -1) return value.slice(0, 100)
+  const start = Math.max(bestIndex - 30, 0)
+  return `${start > 0 ? '…' : ''}${value.slice(start, start + 100)}${start + 100 < value.length ? '…' : ''}`
+}
 
 await app.register(multipart, { limits: { files: 1, fileSize: maxUploadBytes } })
 
@@ -68,11 +78,13 @@ app.get('/api/v1/search', async (request, reply) => {
   if (!repository) return reply.code(503).send({ error: { code: 'REPOSITORY_NOT_CONFIGURED' } })
   const securityLevels = allowedSecurityLevels(actor)
   const semantic = Boolean(embeddings && searchIndex)
-  const rawResults = semantic ? (await searchIndex.hybridSearch({ query, vector: (await embeddings.embed([query]))[0], securityLevels })).map(result => ({ chunkId: result.chunkId, documentId: result.documentId, versionId: result.versionId, title: result.title, documentType: result.documentType, originalFilename: result.originalFilename, content: result.content, headingPath: result.headingPath, score: result.score })) : await repository.keywordSearch(query, 2, securityLevels)
-  const results = [...new Map(rawResults.map(result => [result.documentId, result])).values()].slice(0, 2)
+  // AI 回答用带正文的取证来源（语义向量命中或数据库关键词命中，均按相关度排序）。
+  const answerSources = semantic ? (await searchIndex.hybridSearch({ query, vector: (await embeddings.embed([query]))[0], securityLevels })) : await repository.keywordSearchSources(query, 5, securityLevels)
+  // 页面结果卡片：取每篇文档最高分片段，只返回摘要，不向浏览器下发全文。
+  const rawResults = semantic ? answerSources : await repository.keywordSearch(query, 2, securityLevels)
+  const results = [...new Map(rawResults.map(result => [result.documentId, result])).values()].slice(0, 2).map(result => ({ chunkId: result.chunkId, documentId: result.documentId, versionId: result.versionId, title: result.title, documentType: result.documentType, originalFilename: result.originalFilename, snippet: result.snippet || snippetOf(result.content, query), headingPath: result.headingPath, score: result.score }))
   let answer
   if (request.query?.answer !== '0' && answers && results.length) {
-    const answerSources = semantic ? rawResults : await repository.keywordSearchSources(query, 5, securityLevels)
     if (answerSources.length) try { answer = await answers.answer(query, answerSources.slice(0, 5)) } catch (error) { request.log.warn({ error: error.message }, 'deepseek answer unavailable') }
   }
   return { data: { query, mode: semantic ? 'semantic' : 'keyword', results, answer } }

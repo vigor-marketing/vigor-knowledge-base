@@ -2,6 +2,22 @@ import mysql from 'mysql2/promise'
 import { randomUUID } from 'node:crypto'
 import { chunkExtractedText } from './chunker.mjs'
 
+const escapeLike = value => String(value || '').replace(/[\\%_]/g, '\\$&')
+
+// 从命中内容中截取命中词附近约 100 字的片段，供搜索摘要展示（不返回全文）。
+export function buildSnippet(content, terms) {
+  const text = String(content || '')
+  if (!text) return ''
+  let bestIndex = -1
+  for (const term of terms) {
+    const index = text.indexOf(term)
+    if (index >= 0 && (bestIndex === -1 || index < bestIndex)) bestIndex = index
+  }
+  if (bestIndex === -1) return text.slice(0, 100)
+  const start = Math.max(bestIndex - 30, 0)
+  return `${start > 0 ? '…' : ''}${text.slice(start, start + 100)}${start + 100 < text.length ? '…' : ''}`
+}
+
 export class DocumentRepository {
   constructor(mysqlUrl, pool = mysql.createPool(mysqlUrl)) {
     this.pool = pool
@@ -245,40 +261,75 @@ export class DocumentRepository {
        ${where} ORDER BY version.created_at DESC`, params)
     return rows
   }
-  async keywordSearch(query, limit = 20, securityLevels = ['public', 'internal', 'confidential', 'restricted']) {
-    const raw = query.trim()
+  // 提取查询词并生成匹配/打分 SQL 片段。权重：标题命中 +3、内容命中 +1，多个词累加。
+  searchClauses(query) {
+    const raw = String(query || '').trim()
     const compact = raw.toLowerCase().replace(/[\s_\-./，。；;、！？!?：:（）()【】\[\]]/g, '')
     const latinTerms = raw.match(/[a-z0-9][a-z0-9._/-]*/gi) || []
     const chineseTerms = (raw.match(/[\u4e00-\u9fff]{2,}/g) || []).flatMap(value => [value, ...Array.from({ length: Math.max(value.length - 1, 0) }, (_, index) => value.slice(index, index + 2))])
     const terms = [...new Set([raw, compact, ...raw.split(/[\s,，。；;、！？!?的了是和与及在]/).map(term => term.trim()), ...latinTerms, ...chineseTerms].filter(term => term.length >= 2))].slice(0, 20)
-    if (!terms.length) return []
+    if (!terms.length) return null
     const normalizedContent = "LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(chunk.content, ' ', ''), '-', ''), '_', ''), '/', ''), '.', ''), '，', ''), '。', ''), '：', ''))"
     const normalizedTitle = "LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(document.title, ' ', ''), '-', ''), '_', ''), '/', ''), '.', ''), '，', ''), '。', ''), '：', ''))"
     const where = terms.map(() => `(chunk.content LIKE ? OR document.title LIKE ? OR ${normalizedContent} LIKE ? OR ${normalizedTitle} LIKE ?)`).join(' OR ')
-    const values = [...securityLevels, ...terms.flatMap(term => { const normalized = term.toLowerCase().replace(/[\s_\-./，。；;、！？!?：:（）()【】\[\]]/g, ''); return [`%${term}%`, `%${term}%`, `%${normalized}%`, `%${normalized}%`] })]
-    const securityPlaceholders = securityLevels.map(() => '?').join(', ')
-    const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 50)
-    const [rows] = await this.pool.execute(`SELECT MIN(chunk.chunk_id) AS chunkId, document.document_id AS documentId, chunk.version_id AS versionId, document.title, document.document_type AS documentType, version.original_filename AS originalFilename, 1 AS score FROM knowledge_document_chunks chunk JOIN knowledge_document_versions version ON version.version_id = chunk.version_id JOIN knowledge_documents document ON document.document_id = version.document_id WHERE document.status = 'active' AND document.security_level IN (${securityPlaceholders}) AND version.version_id = document.current_version_id AND (${where}) GROUP BY document.document_id, chunk.version_id, document.title, document.document_type, version.original_filename, document.updated_at ORDER BY document.updated_at DESC LIMIT ${safeLimit}`, values)
-    return rows
+    const perTerm = term => { const normalized = escapeLike(term.toLowerCase().replace(/[\s_\-./，。；;、！？!?：:（）()【】\[\]]/g, '')); const rawTerm = escapeLike(term); return [`%${rawTerm}%`, `%${rawTerm}%`, `%${normalized}%`, `%${normalized}%`] }
+    const whereParams = terms.flatMap(perTerm)
+    const scoreExpr = terms.map(() => `(CASE WHEN chunk.content LIKE ? THEN 1 ELSE 0 END) + (CASE WHEN document.title LIKE ? THEN 3 ELSE 0 END) + (CASE WHEN ${normalizedContent} LIKE ? THEN 1 ELSE 0 END) + (CASE WHEN ${normalizedTitle} LIKE ? THEN 3 ELSE 0 END)`).join(' + ')
+    const scoreParams = terms.flatMap(perTerm)
+    return { terms, where, scoreExpr, whereParams, scoreParams }
   }
 
-  // Search snippets are intentionally separate from keywordSearch(): the latter
-  // powers the file-card UI and must not send document bodies to the browser.
+  async keywordSearch(query, limit = 20, securityLevels = ['public', 'internal', 'confidential', 'restricted']) {
+    const clauses = this.searchClauses(query)
+    if (!clauses) return []
+    const { terms, where, scoreExpr, whereParams, scoreParams } = clauses
+    const securityPlaceholders = securityLevels.map(() => '?').join(', ')
+    const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 50)
+    const [rows] = await this.pool.execute(
+      `SELECT chunk.chunk_id AS chunkId, document.document_id AS documentId, chunk.version_id AS versionId,
+              document.title, document.document_type AS documentType, version.original_filename AS originalFilename,
+              chunk.heading_path AS headingPath, chunk.content, (${scoreExpr}) AS score
+       FROM knowledge_document_chunks chunk
+       JOIN knowledge_document_versions version ON version.version_id = chunk.version_id
+       JOIN knowledge_documents document ON document.document_id = version.document_id
+       WHERE document.status = 'active' AND document.security_level IN (${securityPlaceholders})
+         AND version.version_id = document.current_version_id AND (${where})
+       ORDER BY score DESC, document.updated_at DESC
+       LIMIT ${safeLimit}`,
+      [...scoreParams, ...securityLevels, ...whereParams],
+    )
+    const results = []
+    const seen = new Set()
+    for (const row of rows) {
+      if (seen.has(row.documentId)) continue
+      seen.add(row.documentId)
+      results.push({ chunkId: row.chunkId, documentId: row.documentId, versionId: row.versionId, title: row.title, documentType: row.documentType, originalFilename: row.originalFilename, snippet: buildSnippet(row.content, terms), score: Number(row.score) })
+      if (results.length >= limit) break
+    }
+    return results
+  }
+
+  // 供 AI 回答取证的完整片段（含正文），按相关度排序后返回。
   async keywordSearchSources(query, limit = 5, securityLevels = ['public', 'internal', 'confidential', 'restricted']) {
-    const raw = query.trim()
-    const compact = raw.toLowerCase().replace(/[\s_\-./，。；;、！？!?：:（）()【】\[\]]/g, '')
-    const latinTerms = raw.match(/[a-z0-9][a-z0-9._/-]*/gi) || []
-    const chineseTerms = (raw.match(/[\u4e00-\u9fff]{2,}/g) || []).flatMap(value => [value, ...Array.from({ length: Math.max(value.length - 1, 0) }, (_, index) => value.slice(index, index + 2))])
-    const terms = [...new Set([raw, compact, ...raw.split(/[\s,，。；;、！？!?的了是和与及在]/).map(term => term.trim()), ...latinTerms, ...chineseTerms].filter(term => term.length >= 2))].slice(0, 20)
-    if (!terms.length) return []
-    const normalizedContent = "LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(chunk.content, ' ', ''), '-', ''), '_', ''), '/', ''), '.', ''), '，', ''), '。', ''), '：', ''))"
-    const normalizedTitle = "LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(document.title, ' ', ''), '-', ''), '_', ''), '/', ''), '.', ''), '，', ''), '。', ''), '：', ''))"
-    const where = terms.map(() => `(chunk.content LIKE ? OR document.title LIKE ? OR ${normalizedContent} LIKE ? OR ${normalizedTitle} LIKE ?)`).join(' OR ')
-    const values = [...securityLevels, ...terms.flatMap(term => { const normalized = term.toLowerCase().replace(/[\s_\-./，。；;、！？!?：:（）()【】\[\]]/g, ''); return [`%${term}%`, `%${term}%`, `%${normalized}%`, `%${normalized}%`] })]
+    const clauses = this.searchClauses(query)
+    if (!clauses) return []
+    const { where, scoreExpr, whereParams, scoreParams } = clauses
     const securityPlaceholders = securityLevels.map(() => '?').join(', ')
     const safeLimit = Math.min(Math.max(Number(limit) || 5, 1), 20)
-    const [rows] = await this.pool.execute(`SELECT chunk.chunk_id AS chunkId, document.document_id AS documentId, chunk.version_id AS versionId, document.title, document.document_type AS documentType, version.original_filename AS originalFilename, chunk.heading_path AS headingPath, chunk.content, 1 AS score FROM knowledge_document_chunks chunk JOIN knowledge_document_versions version ON version.version_id = chunk.version_id JOIN knowledge_documents document ON document.document_id = version.document_id WHERE document.status = 'active' AND document.security_level IN (${securityPlaceholders}) AND version.version_id = document.current_version_id AND (${where}) ORDER BY document.updated_at DESC, chunk.ordinal ASC LIMIT ${safeLimit}`, values)
-    return rows.filter(row => String(row.content || '').trim())
+    const [rows] = await this.pool.execute(
+      `SELECT chunk.chunk_id AS chunkId, document.document_id AS documentId, chunk.version_id AS versionId,
+              document.title, document.document_type AS documentType, version.original_filename AS originalFilename,
+              chunk.heading_path AS headingPath, chunk.content, (${scoreExpr}) AS score
+       FROM knowledge_document_chunks chunk
+       JOIN knowledge_document_versions version ON version.version_id = chunk.version_id
+       JOIN knowledge_documents document ON document.document_id = version.document_id
+       WHERE document.status = 'active' AND document.security_level IN (${securityPlaceholders})
+         AND version.version_id = document.current_version_id AND (${where})
+       ORDER BY score DESC, document.updated_at DESC, chunk.ordinal ASC
+       LIMIT ${safeLimit}`,
+      [...scoreParams, ...securityLevels, ...whereParams],
+    )
+    return rows.filter(row => String(row.content || '').trim()).map(row => ({ ...row, score: Number(row.score) }))
   }
 
   async listManageableDocuments() {
