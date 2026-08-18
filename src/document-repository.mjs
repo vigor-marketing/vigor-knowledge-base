@@ -284,7 +284,8 @@ export class DocumentRepository {
     if (!clauses) return []
     const { terms, where, scoreExpr, whereParams, scoreParams } = clauses
     const securityPlaceholders = securityLevels.map(() => '?').join(', ')
-    const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 50)
+    // SQL 按 chunk 取数；取足够多，去重后才能覆盖 limit 篇文档。
+    const safeLimit = Math.min(Math.max(Number(limit) * 20 || 100, 100), 300)
     const [rows] = await this.pool.execute(
       `SELECT chunk.chunk_id AS chunkId, document.document_id AS documentId, chunk.version_id AS versionId,
               document.title, document.document_type AS documentType, version.original_filename AS originalFilename,
@@ -309,13 +310,13 @@ export class DocumentRepository {
     return results
   }
 
-  // 供 AI 回答取证的完整片段（含正文），按相关度排序后返回。
+  // 供 AI 回答取证的完整片段（含正文），按相关度排序、按文档去重后返回。
   async keywordSearchSources(query, limit = 5, securityLevels = ['public', 'internal', 'confidential', 'restricted']) {
     const clauses = this.searchClauses(query)
     if (!clauses) return []
     const { where, scoreExpr, whereParams, scoreParams } = clauses
     const securityPlaceholders = securityLevels.map(() => '?').join(', ')
-    const safeLimit = Math.min(Math.max(Number(limit) || 5, 1), 20)
+    const safeLimit = Math.min(Math.max(Number(limit) * 5 || 10, 10), 50)
     const [rows] = await this.pool.execute(
       `SELECT chunk.chunk_id AS chunkId, document.document_id AS documentId, chunk.version_id AS versionId,
               document.title, document.document_type AS documentType, version.original_filename AS originalFilename,
@@ -329,7 +330,15 @@ export class DocumentRepository {
        LIMIT ${safeLimit}`,
       [...scoreParams, ...securityLevels, ...whereParams],
     )
-    return rows.filter(row => String(row.content || '').trim()).map(row => ({ ...row, score: Number(row.score) }))
+    const results = []
+    const seen = new Set()
+    for (const row of rows) {
+      if (!String(row.content || '').trim() || seen.has(row.documentId)) continue
+      seen.add(row.documentId)
+      results.push({ ...row, score: Number(row.score) })
+      if (results.length >= limit) break
+    }
+    return results
   }
 
   async listManageableDocuments() {
