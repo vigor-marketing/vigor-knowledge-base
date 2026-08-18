@@ -256,5 +256,5 @@ html.workbench-embedded .sidebar .side-note{color:#aaa}
 .category-nav-h .category-hcol button.level-1.active{color:#d92d20;font-weight:600}
 
 /* KNOWLEDGE_PREVIEW_CENTER_V22: force preview dialog centered in the viewport */
-.preview-dialog{position:fixed!important;top:50%!important;left:50%!important;transform:translate(-50%,-50%)!important;margin:0!important;inset:auto!important;max-width:calc(100vw - 24px);max-height:calc(100vh - 24px)}
+.preview-dialog{position:fixed!important;top:50%!important;left:50%!important;transform:translate(-50%,-50%)!important;margin:0!important;max-width:calc(100vw - 24px);max-height:calc(100vh - 24px)}
 .preview-dialog::backdrop{background:rgba(15,23,42,.55)}
