@@ -360,7 +360,7 @@ export class DocumentRepository {
   async keywordSearchSources(query, limit = 5, securityLevels = ['public', 'internal', 'confidential', 'restricted']) {
     const clauses = this.searchClauses(query)
     if (!clauses) return []
-    const { where, scoreExpr, whereParams, scoreParams } = clauses
+    const { terms, where, scoreExpr, whereParams, scoreParams } = clauses
     const securityPlaceholders = securityLevels.map(() => '?').join(', ')
     const safeLimit = Math.min(Math.max(Number(limit) * 5 || 10, 10), 50)
     const [rows] = await this.pool.execute(
