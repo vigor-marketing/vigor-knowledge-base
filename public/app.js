@@ -111,7 +111,7 @@ async function loadTypes() {
   $('#type-parent').innerHTML = '<option value="">作为一级分类</option>' + state.types.map(type => `<option value="${escapeHtml(type.typeCode)}">${escapeHtml(categoryOptionLabel(type))}</option>`).join('')
   $('#record-type-filter').innerHTML = '<option value="">全部资料</option>' + state.types.map(type => `<option value="${escapeHtml(type.typeCode)}">${escapeHtml(categoryOptionLabel(type))}</option>`).join('')
   if (state.activeType && !state.types.some(type => type.typeCode === state.activeType)) state.activeType = ''
-  if (!state.activeType) state.activeType = childTypes('')[0]?.typeCode || state.types[0]?.typeCode || ''
+  if (!state.activeType) { const root = childTypes('')[0]?.typeCode || state.types[0]?.typeCode || ''; const children = childTypes(root); state.activeType = children.length ? children[0].typeCode : root }
   renderFilters()
   renderTypeList()
   setMessage('#service-status', '资料服务已就绪')
@@ -195,15 +195,25 @@ function syncUploadMode() {
 function renderFilters() {
   const active = state.types.find(type => type.typeCode === state.activeType)
   const trail = active ? categoryTrail(active.typeCode) : []
-  const rootTypes = childTypes('')
+  const parentCode = active?.parentTypeCode || ''
+  const siblings = parentCode ? childTypes(parentCode) : childTypes('')
   const subTypes = active ? childTypes(active.typeCode) : []
-  const rootCode = trail[0]?.typeCode
   const renderCard = (type, selected) => { const hasChildren = childTypes(type.typeCode).length > 0; const count = countFilesForType(type.typeCode); const hint = count ? `${count} 份文件` : (hasChildren ? '继续浏览' : '暂无文件'); return `<button class="download-category-option ${selected ? 'active' : ''} ${hasChildren ? 'has-children' : ''}" type="button" data-type="${escapeHtml(type.typeCode)}" aria-pressed="${selected}"><span>分类</span><strong>${escapeHtml(type.displayName)}</strong><small>${hint}</small></button>` }
-  const rootCards = rootTypes.map(type => renderCard(type, type.typeCode === rootCode || (!active && type.typeCode === state.activeType))).join('')
-  const sublevel = active && subTypes.length ? `<section class="category-sublevel"><div class="download-category-directory" role="list" aria-label="子资料分类">${subTypes.map(type => renderCard(type, type.typeCode === state.activeType)).join('')}</div></section>` : ''
+  const siblingCards = siblings.map(type => renderCard(type, type.typeCode === state.activeType)).join('')
+  const sublevel = subTypes.length ? `<section class="category-sublevel"><div class="download-category-directory" role="list" aria-label="子资料分类">${subTypes.map(type => renderCard(type, type.typeCode === state.activeType)).join('')}</div></section>` : ''
   const breadcrumb = trail.length > 1 ? `<nav class="category-breadcrumb" aria-label="当前分类路径">${trail.map((type, index) => `${index ? '<span aria-hidden="true">/</span>' : ''}<button type="button" data-type="${escapeHtml(type.typeCode)}" ${index === trail.length - 1 ? 'aria-current="page"' : ''}>${escapeHtml(type.displayName)}</button>`).join('')}</nav>` : ''
-  $('#filters').innerHTML = `<section class="category-browser"><div class="category-browser__header"><div><h3>按分类浏览</h3><p>选择分类后，在下方点击文件即可预览、下载和讨论。</p></div></div>${breadcrumb}${rootCards ? `<div class="download-category-directory" role="list" aria-label="一级资料分类">${rootCards}</div>` : '<p class="hint">暂无可用资料分类。</p>'}${sublevel}</section>`
-  $('#filters').querySelectorAll('.download-category-option, .category-breadcrumb button').forEach(button => button.addEventListener('click', () => { if (button.getAttribute('aria-current') === 'page') return; state.activeType = button.dataset.type; state.activeDocumentId = ''; renderFilters(); renderDownloads() }))
+  const browserLabel = parentCode ? '同级分类' : '一级分类'
+  $('#filters').innerHTML = `<section class="category-browser"><div class="category-browser__header"><div><h3>按分类浏览</h3><p>选择分类后，在下方点击文件即可预览、下载和讨论。</p></div></div>${breadcrumb}${siblingCards ? `<div class="download-category-directory" role="list" aria-label="${browserLabel}">${siblingCards}</div>` : '<p class="hint">暂无可用资料分类。</p>'}${sublevel}</section>`
+  $('#filters').querySelectorAll('.download-category-option, .category-breadcrumb button').forEach(button => button.addEventListener('click', () => {
+    if (button.getAttribute('aria-current') === 'page') return
+    let typeCode = button.dataset.type
+    // 点击分类卡片时若含子分类，自动进入第一个子分类直达文件（面包屑点击则停留在所在层）。
+    if (!button.closest('.category-breadcrumb')) { const children = childTypes(typeCode); if (children.length) typeCode = children[0].typeCode }
+    state.activeType = typeCode
+    state.activeDocumentId = ''
+    renderFilters()
+    renderDownloads()
+  }))
 }
 // 下载页：一次拉取全部已发布资料，分类切换与文件选择都在前端完成，避免重复请求。
 async function loadDownloads() {
@@ -216,7 +226,9 @@ function renderDownloads() {
   if (!state.activeType) { list.innerHTML = '<article class="empty"><h3>请选择资料分类</h3><p>选择分类后即可查看该类文件，再点击具体文件展开下载与讨论。</p></article>'; return }
   state.downloads = state.allDownloads.filter(document => document.documentType === state.activeType)
   if (!state.downloads.length) { list.innerHTML = '<article class="empty"><h3>这里还没有已发布资料</h3><p>上传并完成审核发布后，会按分类显示在这里。</p></article>'; return }
-  list.innerHTML = `<section class="download-picker"><div class="download-category__head"><div><p class="meta">当前分类文件</p><h3>${escapeHtml(typeLabel(state.activeType))}</h3></div><span>${state.downloads.length} 份资料</span></div><div class="download-file-options">${state.downloads.map(document => `<button class="download-file-option ${document.documentId === state.activeDocumentId ? 'active' : ''}" type="button" data-document-id="${escapeHtml(document.documentId)}"><span>文件</span><strong>${escapeHtml(document.title)}</strong><small>${escapeHtml(document.originalFilename)}${document.byteSize ? ` · ${formatBytes(document.byteSize)}` : ''}</small></button>`).join('')}</div><div class="download-file-detail"></div></section>`
+  const trail = categoryTrail(state.activeType)
+  const heading = trail.length ? trail.map(type => type.displayName).join(' / ') : typeLabel(state.activeType)
+  list.innerHTML = `<section class="download-picker"><div class="download-category__head"><div><p class="meta">当前分类文件</p><h3>${escapeHtml(heading)}</h3></div><span>${state.downloads.length} 份资料</span></div><div class="download-file-options">${state.downloads.map(document => `<button class="download-file-option ${document.documentId === state.activeDocumentId ? 'active' : ''}" type="button" data-document-id="${escapeHtml(document.documentId)}"><span>文件</span><strong>${escapeHtml(document.title)}</strong><small>${escapeHtml(document.originalFilename)}${document.byteSize ? ` · ${formatBytes(document.byteSize)}` : ''}</small></button>`).join('')}</div><div class="download-file-detail"></div></section>`
   list.querySelectorAll('.download-file-option').forEach(button => button.addEventListener('click', () => {
     state.activeDocumentId = button.dataset.documentId
     list.querySelectorAll('.download-file-option').forEach(node => node.classList.toggle('active', node === button))
