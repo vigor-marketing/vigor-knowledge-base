@@ -40,3 +40,6 @@ html.workbench-embedded .sidebar nav{grid-template-columns:repeat(2,minmax(0,1fr
 
 /* KNOWLEDGE_SEARCH_SMART_V9: relevance snippet and term highlighting */
 .search-snippet{margin:6px 0 0;color:#475569;font-size:13px;line-height:1.65;overflow-wrap:anywhere}.search-snippet mark,.search-file h3 mark{background:#fef3c7;color:#92400e;border-radius:3px;padding:0 2px;font-weight:700}
+
+/* KNOWLEDGE_RECORD_FILTER_V10: category filter on management records */
+.record-toolbar{display:flex;align-items:flex-end;justify-content:flex-end;gap:10px}.record-filter{display:grid;gap:5px;color:#475569;font-size:12px;font-weight:700}.record-filter select{width:auto;min-width:180px;padding:8px 10px;font-weight:600}.records .file-head{flex-wrap:wrap}@media(max-width:600px){.record-toolbar{width:100%;flex-direction:column;align-items:stretch}.record-filter select{width:100%}}
