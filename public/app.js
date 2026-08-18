@@ -69,6 +69,25 @@ function confirmAction({ title, message, confirmLabel, danger = true }) {
   })
 }
 
+// 与 confirmAction 同风格的输入对话框，替代浏览器原生 prompt。
+function promptAction({ title, message, value = '', confirmLabel = '确认', danger = false }) {
+  return new Promise(resolve => {
+    const dialog = window.document.createElement('div'); dialog.className = 'action-dialog'
+    dialog.innerHTML = `<div class="action-dialog__backdrop"></div><section class="action-dialog__panel" role="dialog" aria-modal="true" aria-labelledby="action-dialog-title"><p class="eyebrow">请确认操作</p><h3 id="action-dialog-title"></h3><p class="action-dialog__message"></p><input class="action-dialog__input" maxlength="64"/><div class="action-dialog__actions"><button type="button" class="action-dialog__cancel">取消</button><button type="button" class="${danger ? 'danger ' : ''}action-dialog__confirm"></button></div></section>`
+    dialog.querySelector('#action-dialog-title').textContent = title
+    dialog.querySelector('.action-dialog__message').textContent = message
+    const input = dialog.querySelector('.action-dialog__input'); input.value = value
+    dialog.querySelector('.action-dialog__confirm').textContent = confirmLabel
+    const close = result => { dialog.remove(); resolve(result) }
+    const confirm = () => close(input.value.trim() || null)
+    dialog.querySelector('.action-dialog__cancel').addEventListener('click', () => close(null))
+    dialog.querySelector('.action-dialog__confirm').addEventListener('click', confirm)
+    dialog.querySelector('.action-dialog__backdrop').addEventListener('click', () => close(null))
+    input.addEventListener('keydown', event => { if (event.key === 'Enter') confirm(); if (event.key === 'Escape') close(null) })
+    window.document.body.append(dialog); input.focus(); input.select()
+  })
+}
+
 async function loadTypes() {
   state.types = await api('/v1/document-types')
   const options = state.types.map(type => `<option value="${escapeHtml(type.typeCode)}">${escapeHtml(type.displayName)}</option>`).join('')
@@ -87,8 +106,9 @@ function renderTypeList() {
   list.querySelectorAll('.delete-type').forEach(button => button.addEventListener('click', () => deactivateType(button.dataset.type)))
 }
 async function renameType(typeCode) {
-  const type = state.types.find(item => item.typeCode === typeCode); const displayName = window.prompt(`编辑“${typeCode}”的显示名称（编码不可修改）：`, type?.displayName || '')
-  if (displayName === null) return
+  const type = state.types.find(item => item.typeCode === typeCode)
+  const displayName = await promptAction({ title: `编辑分类“${typeCode}”`, message: '显示名称（编码不可修改）：', value: type?.displayName || '', confirmLabel: '保存' })
+  if (!displayName) return
   try { const result = await api(`/v1/document-types/${encodeURIComponent(typeCode)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ displayName }) }); setMessage('#type-state', `已更新为“${result.displayName}”。`); await loadTypes() } catch (error) { setMessage('#type-state', `编辑失败：${error.message}`, true) }
 }
 async function deactivateType(typeCode) {
@@ -173,7 +193,7 @@ async function loadDownloads() {
     state.downloads = await api(`/v1/documents?type=${encodeURIComponent(state.activeType)}`)
     if (!state.downloads.length) { list.innerHTML = '<article class="empty"><h3>这里还没有已发布资料</h3><p>上传并完成审核发布后，会按分类显示在这里。</p></article>'; return }
     const selected = state.downloads.find(document => document.documentId === state.activeDocumentId)
-    list.innerHTML = `<section class="download-picker"><div class="download-category__head"><div><p class="meta">第 2 步：选择文件</p><h3>${escapeHtml(typeLabel(state.activeType))}</h3></div><span>${state.downloads.length} 份资料</span></div><div class="download-file-options">${state.downloads.map(document => `<button class="download-file-option ${document.documentId === state.activeDocumentId ? 'active' : ''}" type="button" data-document-id="${escapeHtml(document.documentId)}"><span>文件</span><strong>${escapeHtml(document.title)}</strong><small>${escapeHtml(document.originalFilename)}</small></button>`).join('')}</div><div class="download-file-detail"></div></section>`
+    list.innerHTML = `<section class="download-picker"><div class="download-category__head"><div><p class="meta">当前分类文件</p><h3>${escapeHtml(typeLabel(state.activeType))}</h3></div><span>${state.downloads.length} 份资料</span></div><div class="download-file-options">${state.downloads.map(document => `<button class="download-file-option ${document.documentId === state.activeDocumentId ? 'active' : ''}" type="button" data-document-id="${escapeHtml(document.documentId)}"><span>文件</span><strong>${escapeHtml(document.title)}</strong><small>${escapeHtml(document.originalFilename)}</small></button>`).join('')}</div><div class="download-file-detail"></div></section>`
     list.querySelectorAll('.download-file-option').forEach(button => button.addEventListener('click', () => { state.activeDocumentId = button.dataset.documentId; loadDownloads() }))
     if (selected) list.querySelector('.download-file-detail').append(renderDocument(selected))
   } catch (error) { list.innerHTML = `<article class="empty"><h3>无法读取资料</h3><p>${escapeHtml(error.message)}</p></article>` }
@@ -187,7 +207,7 @@ function renderDocument(record) {
   card.querySelector('.comment-form').addEventListener('submit', event => submitComment(event, card, record.documentId))
   return card
 }
-async function downloadDocument(documentId) { try { const data = await api(`/v1/documents/${encodeURIComponent(documentId)}/download`, { headers: { accept: 'application/json' } }); window.location.assign(data.url) } catch (error) { window.alert(`下载失败：${error.message}`) } }
+async function downloadDocument(documentId) { try { const data = await api(`/v1/documents/${encodeURIComponent(documentId)}/download`, { headers: { accept: 'application/json' } }); window.location.assign(data.url) } catch (error) { await confirmAction({ title: '下载失败', message: error.message, confirmLabel: '知道了', danger: false }) } }
 async function previewDocument(documentId) {
   try {
     const preview = await api(`/v1/documents/${encodeURIComponent(documentId)}/preview`)
@@ -204,7 +224,7 @@ async function previewDocument(documentId) {
 }
 function commentMarkup(comment, reply = false) { return `<article class="comment${reply ? ' comment-reply' : ''}"><div class="comment-meta"><div><b>${escapeHtml(comment.authorName || comment.createdBy || '资料库用户')}</b><span class="comment-kind">${comment.commentKind === 'suggestion' ? '建议' : reply ? '回复' : '评价'}</span></div><time datetime="${escapeHtml(comment.createdAt)}">${formatDate(comment.createdAt)}</time></div><p class="comment-content">${renderMentions(comment.content)}</p>${comment.mentions?.length ? `<small>提及 ${comment.mentions.map(mention => `@${escapeHtml(mention)}`).join('、')}</small>` : ''}${comment.attachments?.length ? `<div class="attachment-list">${comment.attachments.map(item => `<button class="attachment-download" type="button" data-attachment-id="${escapeHtml(item.attachmentId)}">附件：${escapeHtml(item.originalFilename)}</button>`).join('')}</div>` : ''}${reply ? '' : `<button class="reply-toggle btn-secondary" type="button" data-comment-id="${escapeHtml(comment.commentId)}">回复</button><form class="reply-form" hidden><label>回复 ${escapeHtml(comment.authorName || comment.createdBy || '这条评论')}<textarea maxlength="2000" placeholder="输入公开回复；所有可访问用户均可见" required></textarea></label><button type="submit">发布回复</button><p class="comment-state" role="status"></p></form>`}</article>` }
 async function loadComments(card, documentId) { const list = card.querySelector('.comment-list'); try { const comments = await api(`/v1/documents/${encodeURIComponent(documentId)}/comments`); const roots = comments.filter(comment => !comment.parentCommentId); list.innerHTML = roots.length ? `<p class="comment-count">${roots.length} 条讨论 · 所有内容公开可见</p>${roots.map(comment => { const replies = comments.filter(reply => reply.parentCommentId === comment.commentId); return `<section class="comment-thread">${commentMarkup(comment)}${replies.length ? `<div class="comment-replies"><p>${replies.length} 条回复</p>${replies.map(reply => commentMarkup(reply, true)).join('')}</div>` : ''}</section>` }).join('')}` : '<p class="hint">暂时没有评价或建议。发布后会对所有可访问用户展示。</p>'; list.querySelectorAll('.attachment-download').forEach(button => button.addEventListener('click', () => downloadCommentAttachment(button.dataset.attachmentId))); list.querySelectorAll('.reply-toggle').forEach(button => button.addEventListener('click', () => { const form = button.parentElement.querySelector('.reply-form'); const opening = form.hidden; form.hidden = !opening; button.setAttribute('aria-expanded', String(opening)); button.textContent = opening ? '收起回复' : '回复'; if (opening) { form.querySelector('textarea').focus(); revealExpandedContent(form) } })); list.querySelectorAll('.reply-form').forEach(form => form.addEventListener('submit', event => submitReply(event, card, documentId, event.currentTarget.parentElement.querySelector('.reply-toggle').dataset.commentId))); revealExpandedContent(list) } catch (error) { list.innerHTML = `<p class="error">评论加载失败：${escapeHtml(error.message)}</p>` } }
-async function downloadCommentAttachment(attachmentId) { try { const data = await api(`/v1/comment-attachments/${encodeURIComponent(attachmentId)}/download`); window.location.assign(data.url) } catch (error) { window.alert(`附件下载失败：${error.message}`) } }
+async function downloadCommentAttachment(attachmentId) { try { const data = await api(`/v1/comment-attachments/${encodeURIComponent(attachmentId)}/download`); window.location.assign(data.url) } catch (error) { await confirmAction({ title: '附件下载失败', message: error.message, confirmLabel: '知道了', danger: false }) } }
 async function submitComment(event, card, documentId) { event.preventDefault(); const form = event.currentTarget; const output = form.querySelector('.comment-state'); const file = form.attachment.files[0]; try { if (file) { const payload = new FormData(); payload.append('metadata', JSON.stringify({ kind: form.kind.value, content: form.content.value.trim() })); payload.append('file', file); await api(`/v1/documents/${encodeURIComponent(documentId)}/comments/attachment`, { method: 'POST', body: payload }) } else await api(`/v1/documents/${encodeURIComponent(documentId)}/comments`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: form.kind.value, content: form.content.value.trim() }) }); form.reset(); output.textContent = '已公开提交，所有可访问用户均可查看。'; output.classList.remove('error'); await loadComments(card, documentId) } catch (error) { output.textContent = `提交失败：${error.message}`; output.classList.add('error') } }
 async function submitReply(event, card, documentId, parentCommentId) { event.preventDefault(); const form = event.currentTarget; const output = form.querySelector('.comment-state'); try { await api(`/v1/documents/${encodeURIComponent(documentId)}/comments`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'comment', content: form.querySelector('textarea').value.trim(), parentCommentId }) }); await loadComments(card, documentId) } catch (error) { output.textContent = `回复失败：${error.message}`; output.classList.add('error') } }
 
