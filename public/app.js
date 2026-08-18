@@ -250,20 +250,31 @@ function renderDocument(record) {
   return card
 }
 async function downloadDocument(documentId) { try { const data = await api(`/v1/documents/${encodeURIComponent(documentId)}/download`, { headers: { accept: 'application/json' } }); window.location.assign(data.url) } catch (error) { await confirmAction({ title: '下载失败', message: error.message, confirmLabel: '知道了', danger: false }) } }
+let activePreview = null
+function closePreview() {
+  if (!activePreview) return
+  activePreview.dialog.remove()
+  window.document.removeEventListener('keydown', activePreview.onKey)
+  window.document.body.style.overflow = ''
+  activePreview = null
+}
 async function previewDocument(documentId) {
   try {
     const preview = await api(`/v1/documents/${encodeURIComponent(documentId)}/preview`)
     if (!preview.previewable) { await confirmAction({ title: '暂不支持在线预览', message: preview.reason || '请下载文件后在本地查看。', confirmLabel: '知道了', danger: false }); return }
-    // 用普通 div + 网格居中（与确认弹窗同一机制），避免 <dialog> 顶层定位差异导致偏移。
+    // 同一时刻只保留一个预览弹窗（搜索预览与详情预览互不干扰）；打开时锁定页面滚动，
+    // 避免背景滚动造成弹窗位置看起来偏移。
+    closePreview()
     const dialog = window.document.createElement('div')
     dialog.className = 'preview-dialog'
     dialog.innerHTML = `<div class="preview-dialog__backdrop"></div><section class="preview-dialog__panel" role="dialog" aria-modal="true" aria-label="预览文件"><header><div><h3>预览文件</h3><p>${escapeHtml(preview.originalFilename || '资料文件')}</p></div><button type="button" class="preview-dialog__close" aria-label="关闭预览">关闭</button></header><iframe title="${escapeHtml(preview.originalFilename || '资料预览')}" referrerpolicy="no-referrer"></iframe></section>`
     dialog.querySelector('iframe').src = `${API_PATHS[0]}/v1/documents/${encodeURIComponent(documentId)}/preview?inline=1`
-    const close = () => { dialog.remove(); window.document.removeEventListener('keydown', onKey) }
-    const onKey = event => { if (event.key === 'Escape') close() }
-    dialog.querySelector('.preview-dialog__close').addEventListener('click', close)
-    dialog.querySelector('.preview-dialog__backdrop').addEventListener('click', close)
+    const onKey = event => { if (event.key === 'Escape') closePreview() }
+    dialog.querySelector('.preview-dialog__close').addEventListener('click', closePreview)
+    dialog.querySelector('.preview-dialog__backdrop').addEventListener('click', closePreview)
     window.document.addEventListener('keydown', onKey)
+    activePreview = { dialog, onKey }
+    window.document.body.style.overflow = 'hidden'
     window.document.body.append(dialog)
   } catch (error) { await confirmAction({ title: '无法预览文件', message: `请下载后在本地查看。${error.message ? `（${error.message}）` : ''}`, confirmLabel: '知道了', danger: false }) }
 }
