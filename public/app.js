@@ -112,7 +112,7 @@ async function loadTypes() {
   $('#record-type-filter').innerHTML = '<option value="">全部资料</option>' + state.types.map(type => `<option value="${escapeHtml(type.typeCode)}">${escapeHtml(categoryOptionLabel(type))}</option>`).join('')
   if (state.activeType && !state.types.some(type => type.typeCode === state.activeType)) state.activeType = ''
   if (!state.activeType) { const root = childTypes('')[0]?.typeCode || state.types[0]?.typeCode || ''; const children = childTypes(root); state.activeType = children.length ? children[0].typeCode : root }
-  renderCategoryTree()
+  renderCategoryBlocks()
   renderTypeList()
   setMessage('#service-status', '资料服务已就绪')
 }
@@ -193,39 +193,32 @@ function syncUploadMode() {
   }
 }
 // 左侧分类树：一级分类可展开子分类，点击直接选中并在右侧显示文件，无页面跳转感。
-function renderCategoryTree() {
-  const container = $('#category-nav')
-  if (!container || !state.types.length) return
-  if (!state.expandedCategories) state.expandedCategories = new Set()
-  categoryTrail(state.activeType).forEach(type => state.expandedCategories.add(type.typeCode))
-  state.expandedCategories.add(state.activeType)
-  const renderItem = (type, depth) => {
-    const children = childTypes(type.typeCode)
-    const isActive = type.typeCode === state.activeType
-    const isOpen = state.expandedCategories.has(type.typeCode)
-    const count = countFilesForType(type.typeCode)
-    return `<div class="category-nav-item ${isActive ? 'active' : ''}" data-type="${escapeHtml(type.typeCode)}" data-depth="${depth}"><span class="category-nav-caret${children.length ? '' : ' empty'}">${children.length ? (isOpen ? '▾' : '▸') : ''}</span><span class="category-nav-name">${escapeHtml(type.displayName)}</span>${count ? `<span class="category-nav-count">${count}</span>` : ''}</div>${children.length && isOpen ? children.map(child => renderItem(child, depth + 1)).join('') : ''}`
-  }
+// 组织架构式分类小方块：一级方块在上，二级方块缩进排在下方，始终可见、点击选中。
+function renderCategoryBlocks() {
+  const container = $('#category-blocks')
+  if (!container) return
   const roots = childTypes('')
-  container.innerHTML = roots.length ? roots.map(root => renderItem(root, 0)).join('') : '<p class="hint">暂无可用分类。</p>'
-  container.querySelectorAll('.category-nav-caret:not(.empty)').forEach(caret => caret.addEventListener('click', event => {
-    event.stopPropagation()
-    const typeCode = caret.closest('.category-nav-item').dataset.type
-    if (state.expandedCategories.has(typeCode)) state.expandedCategories.delete(typeCode); else state.expandedCategories.add(typeCode)
-    renderCategoryTree()
-  }))
-  container.querySelectorAll('.category-nav-item').forEach(item => item.addEventListener('click', () => {
-    const typeCode = item.dataset.type
-    if (state.activeType !== typeCode) { state.activeType = typeCode; state.activeDocumentId = '' }
-    state.expandedCategories.add(typeCode)
-    renderCategoryTree()
+  if (!roots.length) { container.innerHTML = '<p class="hint">暂无可用资料分类。</p>'; return }
+  const renderBlock = (type, level) => {
+    const count = countFilesForType(type.typeCode)
+    const isActive = type.typeCode === state.activeType
+    return `<button type="button" class="category-block level-${level} ${isActive ? 'active' : ''}" data-type="${escapeHtml(type.typeCode)}" data-level="${level}"><span class="category-block-name">${escapeHtml(type.displayName)}</span><span class="category-block-count">${count} 份</span></button>`
+  }
+  container.innerHTML = roots.map(root => {
+    const children = childTypes(root.typeCode)
+    return `<div class="category-block-group">${renderBlock(root, 0)}${children.length ? `<div class="category-block-children">${children.map(child => renderBlock(child, 1)).join('')}</div>` : ''}</div>`
+  }).join('')
+  container.querySelectorAll('.category-block').forEach(block => block.addEventListener('click', () => {
+    state.activeType = block.dataset.type
+    state.activeDocumentId = ''
+    renderCategoryBlocks()
     renderDownloads()
   }))
 }
 // 下载页：一次拉取全部已发布资料，分类切换与文件选择都在前端完成，避免重复请求。
 async function loadDownloads() {
   try { state.allDownloads = await api('/v1/documents') } catch (error) { const list = $('#download-list'); list.innerHTML = `<article class="empty"><h3>无法读取资料</h3><p>${escapeHtml(error.message)}</p></article>`; return }
-  renderCategoryTree()
+  renderCategoryBlocks()
   renderDownloads()
 }
 function renderDownloads() {
@@ -277,7 +270,7 @@ async function downloadCommentAttachment(attachmentId) { try { const data = awai
 async function submitComment(event, card, documentId) { event.preventDefault(); const form = event.currentTarget; const output = form.querySelector('.comment-state'); const file = form.attachment.files[0]; try { if (file) { const payload = new FormData(); payload.append('metadata', JSON.stringify({ kind: form.kind.value, content: form.content.value.trim() })); payload.append('file', file); await api(`/v1/documents/${encodeURIComponent(documentId)}/comments/attachment`, { method: 'POST', body: payload }) } else await api(`/v1/documents/${encodeURIComponent(documentId)}/comments`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: form.kind.value, content: form.content.value.trim() }) }); form.reset(); output.textContent = '已公开提交，所有可访问用户均可查看。'; output.classList.remove('error'); await loadComments(card, documentId) } catch (error) { output.textContent = `提交失败：${error.message}`; output.classList.add('error') } }
 async function submitReply(event, card, documentId, parentCommentId) { event.preventDefault(); const form = event.currentTarget; const output = form.querySelector('.comment-state'); try { await api(`/v1/documents/${encodeURIComponent(documentId)}/comments`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'comment', content: form.querySelector('textarea').value.trim(), parentCommentId }) }); await loadComments(card, documentId) } catch (error) { output.textContent = `回复失败：${error.message}`; output.classList.add('error') } }
 
-document.querySelectorAll('.nav').forEach(button => button.addEventListener('click', () => { const page = ({ manage: ['资料管理', '上传、更新、发布与归档资料；所有变更保留版本记录。'], downloads: ['资料下载', '搜索、筛选并下载已发布的企业资料。'] })[button.dataset.panel]; document.querySelectorAll('.nav').forEach(node => node.classList.toggle('active', node === button)); document.querySelectorAll('.panel').forEach(node => node.classList.toggle('active', node.id === button.dataset.panel)); $('#page-title').textContent = page[0]; $('#page-description').textContent = page[1]; const navSection = $('#downloads-nav'); if (navSection) navSection.hidden = button.dataset.panel !== 'downloads'; if (button.dataset.panel === 'downloads') loadDownloads(); if (button.dataset.panel === 'manage') loadManageableDocuments() }))
+document.querySelectorAll('.nav').forEach(button => button.addEventListener('click', () => { const page = ({ manage: ['资料管理', '上传、更新、发布与归档资料；所有变更保留版本记录。'], downloads: ['资料下载', '搜索、筛选并下载已发布的企业资料。'] })[button.dataset.panel]; document.querySelectorAll('.nav').forEach(node => node.classList.toggle('active', node === button)); document.querySelectorAll('.panel').forEach(node => node.classList.toggle('active', node.id === button.dataset.panel)); $('#page-title').textContent = page[0]; $('#page-description').textContent = page[1]; if (button.dataset.panel === 'downloads') loadDownloads(); if (button.dataset.panel === 'manage') loadManageableDocuments() }))
 $('#existing-document').addEventListener('change', syncUploadMode)
 $('#refresh-records').addEventListener('click', loadManageableDocuments)
 $('#record-type-filter').addEventListener('change', renderManagementRecords)
