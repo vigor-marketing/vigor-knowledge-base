@@ -254,14 +254,17 @@ async function previewDocument(documentId) {
   try {
     const preview = await api(`/v1/documents/${encodeURIComponent(documentId)}/preview`)
     if (!preview.previewable) { await confirmAction({ title: '暂不支持在线预览', message: preview.reason || '请下载文件后在本地查看。', confirmLabel: '知道了', danger: false }); return }
-    const dialog = window.document.createElement('dialog')
+    // 用普通 div + 网格居中（与确认弹窗同一机制），避免 <dialog> 顶层定位差异导致偏移。
+    const dialog = window.document.createElement('div')
     dialog.className = 'preview-dialog'
-    dialog.innerHTML = `<section class="preview-dialog__panel"><header><div><h3>预览文件</h3><p>${escapeHtml(preview.originalFilename || '资料文件')}</p></div><button type="button" class="preview-dialog__close" aria-label="关闭预览">关闭</button></header><iframe title="${escapeHtml(preview.originalFilename || '资料预览')}" referrerpolicy="no-referrer"></iframe></section>`
+    dialog.innerHTML = `<div class="preview-dialog__backdrop"></div><section class="preview-dialog__panel" role="dialog" aria-modal="true" aria-label="预览文件"><header><div><h3>预览文件</h3><p>${escapeHtml(preview.originalFilename || '资料文件')}</p></div><button type="button" class="preview-dialog__close" aria-label="关闭预览">关闭</button></header><iframe title="${escapeHtml(preview.originalFilename || '资料预览')}" referrerpolicy="no-referrer"></iframe></section>`
     dialog.querySelector('iframe').src = `${API_PATHS[0]}/v1/documents/${encodeURIComponent(documentId)}/preview?inline=1`
-    const close = () => { dialog.close(); dialog.remove() }
+    const close = () => { dialog.remove(); window.document.removeEventListener('keydown', onKey) }
+    const onKey = event => { if (event.key === 'Escape') close() }
     dialog.querySelector('.preview-dialog__close').addEventListener('click', close)
-    dialog.addEventListener('cancel', event => { event.preventDefault(); close() })
-    window.document.body.append(dialog); dialog.showModal()
+    dialog.querySelector('.preview-dialog__backdrop').addEventListener('click', close)
+    window.document.addEventListener('keydown', onKey)
+    window.document.body.append(dialog)
   } catch (error) { await confirmAction({ title: '无法预览文件', message: `请下载后在本地查看。${error.message ? `（${error.message}）` : ''}`, confirmLabel: '知道了', danger: false }) }
 }
 function commentMarkup(comment, reply = false) { return `<article class="comment${reply ? ' comment-reply' : ''}"><div class="comment-meta"><div><b>${escapeHtml(comment.authorName || comment.createdBy || '资料库用户')}</b><span class="comment-kind">${comment.commentKind === 'suggestion' ? '建议' : reply ? '回复' : '评价'}</span></div><time datetime="${escapeHtml(comment.createdAt)}">${formatDate(comment.createdAt)}</time></div><p class="comment-content">${renderMentions(comment.content)}</p>${comment.mentions?.length ? `<small>提及 ${comment.mentions.map(mention => `@${escapeHtml(mention)}`).join('、')}</small>` : ''}${comment.attachments?.length ? `<div class="attachment-list">${comment.attachments.map(item => `<button class="attachment-download" type="button" data-attachment-id="${escapeHtml(item.attachmentId)}">附件：${escapeHtml(item.originalFilename)}</button>`).join('')}</div>` : ''}${reply ? '' : `<button class="reply-toggle btn-secondary" type="button" data-comment-id="${escapeHtml(comment.commentId)}">回复</button><form class="reply-form" hidden><label>回复 ${escapeHtml(comment.authorName || comment.createdBy || '这条评论')}<textarea maxlength="2000" placeholder="输入公开回复；所有可访问用户均可见" required></textarea></label><button type="submit">发布回复</button><p class="comment-state" role="status"></p></form>`}</article>` }

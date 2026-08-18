@@ -258,3 +258,14 @@ html.workbench-embedded .sidebar .side-note{color:#aaa}
 /* KNOWLEDGE_PREVIEW_CENTER_V22: force preview dialog centered in the viewport */
 .preview-dialog{position:fixed!important;top:50%!important;left:50%!important;transform:translate(-50%,-50%)!important;margin:0!important;max-width:calc(100vw - 24px);max-height:calc(100vh - 24px)}
 .preview-dialog::backdrop{background:rgba(15,23,42,.55)}
+
+/* KNOWLEDGE_PREVIEW_PANEL_V24: div-based preview, grid-centered like confirm dialog */
+.preview-dialog{position:fixed!important;inset:0!important;top:auto!important;left:auto!important;transform:none!important;display:grid!important;place-items:center;padding:16px;z-index:2000;margin:0!important;width:100%;height:100%;max-width:none;max-height:none;background:transparent;border:0}
+.preview-dialog__backdrop{position:fixed;inset:0;background:rgba(15,23,42,.55)}
+.preview-dialog__panel{position:relative;z-index:1;width:min(1120px,calc(100vw - 32px));height:min(820px,calc(100vh - 32px));display:grid;grid-template-rows:auto minmax(0,1fr);border-radius:16px;background:#fff;box-shadow:0 22px 64px rgba(15,23,42,.28);overflow:hidden}
+.preview-dialog__panel header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 20px;border-bottom:1px solid #e6e6e6}
+.preview-dialog__panel h3{margin:0;color:#1f1f23;font-size:17px}
+.preview-dialog__panel header p{max-width:65ch;margin:4px 0 0;color:#777;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.preview-dialog__close{min-height:34px!important;padding:5px 10px!important;border-color:#d4d4d4!important;background:#fff!important;color:#333!important;box-shadow:none!important}
+.preview-dialog__panel iframe{width:100%;height:100%;border:0;background:#f8fafc}
+@media(max-width:600px){.preview-dialog{padding:8px}.preview-dialog__panel{width:calc(100vw - 16px);height:calc(100vh - 16px);border-radius:12px}.preview-dialog__panel header{padding:13px 14px}}
