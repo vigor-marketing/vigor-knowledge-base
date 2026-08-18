@@ -147,3 +147,59 @@ html.workbench-embedded .sidebar .nav b{color:#8f8f9c}
 .category-nav-item.active .category-nav-ico{color:#d92d20}
 .category-nav-item:hover{background:#232330;color:#fff}
 .category-nav-item.level-1{padding-left:28px}
+
+/* KNOWLEDGE_WORKBENCH_LIGHT_V17: light gray/black/red, reference-aligned */
+:root{color:#1f1f23;background:#f5f5f5}
+.shell{grid-template-columns:244px minmax(0,1fr)}
+.sidebar{background:#ffffff;color:#333;padding:24px 14px;border-right:1px solid #e6e6e6;min-height:100vh}
+.brand{color:#1f1f23;margin-bottom:28px;font-size:20px}
+.nav{display:flex;align-items:center;gap:9px;color:#555;padding:10px 12px;border-radius:6px;font-size:15px;border-left:3px solid transparent!important}
+.nav b{color:#9a9a9a;width:auto;margin:0;font-size:15px}
+.nav:hover{background:#f2f2f2;color:#1f1f23}
+.nav.active{background:transparent!important;color:#d92d20;font-weight:700;border-left:3px solid #d92d20;border-radius:0;padding-left:9px}
+.nav.active b{color:#d92d20}
+.sidebar-section{margin-top:28px}
+.sidebar-label{color:#999;font-size:11px;letter-spacing:.1em;margin:0 4px 8px}
+.category-nav{display:grid;gap:1px;overflow-y:auto;max-height:calc(100vh - 300px);padding-right:4px}
+.category-nav-item{display:flex;align-items:center;gap:8px;width:100%;padding:8px 12px;border-radius:6px;background:transparent;color:#444;text-align:left;cursor:pointer;border-left:3px solid transparent;min-width:0}
+.category-nav-item:hover{background:#f2f2f2;color:#1f1f23}
+.category-nav-item.active{background:transparent;color:#d92d20;font-weight:700;border-left-color:#d92d20;border-radius:0;padding-left:9px}
+.category-nav-item.level-1{padding-left:28px;color:#777;font-size:14px}
+.category-nav-item.level-1.active{color:#d92d20}
+.category-nav-ico{width:16px;flex:0 0 16px;color:#b0b0b0;font-size:12px;text-align:center}
+.category-nav-item.active .category-nav-ico{color:#d92d20}
+.category-nav-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.category-nav-count{margin-left:auto;flex:0 0 auto;color:#b0b0b0;font-size:12px}
+.category-nav-item.active .category-nav-count{color:#d92d20}
+.side-note{color:#aaa;font-size:12px}
+/* 主按钮黑色，内容区浅灰白卡片 */
+button:not(.nav){background:#1f1f23;border-color:#1f1f23;border-radius:8px}
+button:not(.nav):hover{background:#000}
+.btn-primary{background:#1f1f23!important;border-color:#1f1f23!important}
+.btn-primary:hover{background:#000!important}
+.btn-secondary{border-color:#d4d4d4!important;background:#fff!important;color:#333!important;box-shadow:none!important}
+.btn-secondary:hover{background:#f2f2f2!important;border-color:#bdbdbd!important}
+.content{background:#f5f5f5}
+.card,.download-search,.download-file-list,.download-file-detail,.file-card,.result{background:#fff;border-color:#e6e6e6}
+/* 红强调（选中、数量、高亮、提示） */
+.filter.active{border-color:#d92d20!important;background:#d92d20!important}
+.download-category-option.active,.category-block.active,.download-file-option.active{border-color:#d92d20!important;background:#fdf0ef!important;box-shadow:0 0 0 3px rgba(217,45,32,.1)!important}
+.search-mode{color:#d92d20}
+.search-snippet mark,.search-file h3 mark{background:#fdecea;color:#b42318}
+.mention{background:#fdecea;color:#b42318}
+.public-note{border-color:#f5c6c3;background:#fdf3f2;color:#b42318}
+.comment-kind{background:#fdecea;color:#b42318}
+.attachment-download{border-color:#f5c6c3!important;background:#fdf3f2!important;color:#b42318!important}
+.ai-answer{border-color:#f5c6c3;background:#fdf3f2;color:#1f1f23}
+.ai-answer b{color:#b42318}
+.operation-mode{border-color:#f5c6c3;background:#fdf3f2;color:#b42318}
+.error{color:#d92d20!important}
+/* 嵌入模式同样浅色侧边 */
+html.workbench-embedded .sidebar{background:#fff;color:#333;border-right:1px solid #e6e6e6;padding:18px 14px}
+html.workbench-embedded .sidebar .brand{color:#1f1f23}
+html.workbench-embedded .sidebar .nav,html.workbench-embedded .sidebar .nav:hover{color:#555}
+html.workbench-embedded .sidebar .nav:hover{background:#f2f2f2}
+html.workbench-embedded .sidebar .nav.active,html.workbench-embedded .sidebar .nav.active:hover{color:#d92d20;background:transparent;box-shadow:none;border-left:3px solid #d92d20}
+html.workbench-embedded .sidebar .nav b{color:#9a9a9a}
+html.workbench-embedded .sidebar .sidebar-label{color:#999}
+html.workbench-embedded .sidebar .side-note{color:#aaa}
