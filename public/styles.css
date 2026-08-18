@@ -225,3 +225,13 @@ html.workbench-embedded .sidebar .side-note{color:#aaa}
 .attachment-download{border-color:#e6e6e6!important;background:#fff!important;color:#333!important}
 .attachment-download:hover{border-color:#d92d20!important;color:#d92d20!important}
 .search-file:hover,.download-category-option:hover,.download-file-option:hover{border-color:#c9c9c9!important;background:#fff!important}
+
+/* KNOWLEDGE_HORIZONTAL_CATS_V19: horizontal category bar, sub-levels under parents */
+.category-hbar{display:flex;flex-wrap:wrap;gap:12px 36px;align-items:flex-start;margin:0 0 18px;padding:16px 18px;background:#fff;border:1px solid #ececec;border-radius:10px}
+.category-hcol{display:grid;gap:3px;min-width:96px}
+.category-hcol button{display:block;width:100%;padding:6px 10px;border:0;background:transparent;color:#333;text-align:left;font-size:15px;font-weight:600;border-radius:6px;cursor:pointer;white-space:nowrap}
+.category-hcol button:hover{background:#f6f6f6;color:#1f1f23}
+.category-hcol button.active{color:#d92d20;font-weight:700;background:transparent}
+.category-hcol button.level-1{color:#888;font-size:13px;font-weight:400;padding-left:22px}
+.category-hcol button.level-1.active{color:#d92d20;font-weight:600}
+@media(max-width:900px){.category-hbar{gap:10px 24px;padding:12px 14px}}

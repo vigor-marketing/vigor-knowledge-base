@@ -192,20 +192,16 @@ function syncUploadMode() {
     setMessage('#upload-state', '')
   }
 }
-// 侧边导航栏分类：一级分类为导航条目，二级缩进排在下方，全部可见、点击选中并切换下载面板。
+// 横向分类：一级分类横排成列，二级分类直接排在各自一级下方，纯文字、点击选中。
 function renderCategoryTree() {
-  const container = $('#category-nav')
+  const container = $('#category-hbar')
   if (!container) return
   const roots = childTypes('')
   if (!roots.length) { container.innerHTML = '<p class="hint">暂无可用资料分类。</p>'; return }
-  const renderItem = (type, level) => {
-    const count = countFilesForType(type.typeCode)
-    const isActive = type.typeCode === state.activeType
-    return `<button type="button" class="category-nav-item level-${level} ${isActive ? 'active' : ''}" data-type="${escapeHtml(type.typeCode)}" data-level="${level}"><span class="category-nav-name">${escapeHtml(type.displayName)}</span>${count ? `<span class="category-nav-count">${count}</span>` : ''}</button>`
-  }
-  container.innerHTML = roots.map(root => `${renderItem(root, 0)}${childTypes(root.typeCode).map(child => renderItem(child, 1)).join('')}`).join('')
-  container.querySelectorAll('.category-nav-item').forEach(item => item.addEventListener('click', () => {
-    state.activeType = item.dataset.type
+  const item = (type, level) => { const isActive = type.typeCode === state.activeType; return `<button type="button" class="level-${level} ${isActive ? 'active' : ''}" data-type="${escapeHtml(type.typeCode)}">${escapeHtml(type.displayName)}</button>` }
+  container.innerHTML = roots.map(root => `<div class="category-hcol">${item(root, 0)}${childTypes(root.typeCode).map(child => item(child, 1)).join('')}</div>`).join('')
+  container.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
+    state.activeType = btn.dataset.type
     state.activeDocumentId = ''
     showDownloadsPanel()
     renderCategoryTree()
