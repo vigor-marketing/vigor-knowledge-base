@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <meta name="robots" content="noindex"/>
   <title>企业知识库</title>
-  <link rel="stylesheet" href="styles.css?v=20260818-21"/>
+  <link rel="stylesheet" href="styles.css?v=20260818-22"/>
 </head>
 <body>
   <main class="shell">
@@ -30,7 +30,7 @@
       <section id="manage" class="panel">
         <div class="section-heading"><div><h2>资料管理</h2><p>上传、更新、发布与归档资料；每个操作都保留版本和审计记录。</p></div></div>
         <div class="management-grid">
-          <form id="upload-form" class="form card"><h3>上传资料</h3><label>更新对象（可选）<select id="existing-document" name="existingDocumentId"><option value="">不选择资料（系统将新建资料）</option></select></label><p id="upload-mode" class="operation-mode" role="status">本次操作：新建资料 · 将创建第 1 个版本。</p><p class="hint">选择已有资料时，系统会自动按“更新版本”处理；标题和分类保持不变。</p><label>资料标题<input id="upload-title" name="title" maxlength="255" required/></label><label>资料分类<select id="upload-type" name="documentType" required></select></label><label>文件<input name="file" type="file" accept=".pdf,.docx,.xlsx,.pptx,.txt,.md" required/></label><button id="upload-submit">新建资料并上传</button><p id="upload-state" role="status"></p></form>
+          <form id="upload-form" class="form card"><h3>上传资料</h3><label>更新对象（可选）<select id="existing-document" name="existingDocumentId"><option value="">不选择资料（系统将新建资料）</option></select></label><p id="upload-mode" class="operation-mode" role="status">本次操作：新建资料 · 将创建第 1 个版本。</p><p class="hint">选择已有资料时，系统会自动按“更新版本”处理；标题和分类保持不变。</p><label>资料标题<input id="upload-title" name="title" maxlength="255" required/></label><label>资料分类<select id="upload-type" name="documentType" required></select></label><label>文件<input name="file" type="file" accept=".pdf,.docx,.xlsx,.pptx,.txt,.md" required/><span class="file-hint">支持格式：PDF、Word(.docx)、Excel(.xlsx)、PPT(.pptx)、TXT、Markdown；单个文件最大 50MB</span></label><button id="upload-submit">新建资料并上传</button><p id="upload-state" role="status"></p></form>
           <form id="type-form" class="form card"><h3>资料分类</h3><p class="hint">可建立一级或子分类；编码留空时系统自动生成。新增后会立即出现在上传分类和下载筛选中。</p><label>上级分类（可选）<select name="parentTypeCode" id="type-parent"><option value="">作为一级分类</option></select></label><label>类型名称<input name="displayName" maxlength="64" placeholder="例如：培训资料" required/></label><label>类型编码（可选）<input name="typeCode" maxlength="64" pattern="[A-Za-z0-9_-]{2,64}" placeholder="例如：TRAINING；留空自动生成"/></label><button>新增类型</button><p id="type-state" role="status"></p><div id="type-list" class="management-list"><p class="hint">正在加载分类…</p></div></form>
         </div>
         <section class="card records"><div class="file-head"><div><h3>资料记录</h3><p class="hint">草稿解析完成后，点击“发布到下载”才会对可访问用户开放。</p></div><div class="record-toolbar"><label class="record-filter">按分类筛选<select id="record-type-filter"><option value="">全部资料</option></select></label><button id="refresh-records" class="btn-secondary" type="button">刷新记录</button></div></div><div id="management-records" class="management-list"><p class="hint">正在加载资料记录…</p></div></section>
@@ -43,6 +43,6 @@
       </section>
     </section>
   </main>
-  <script type="module" src="app.js?v=20260818-21"></script>
+  <script type="module" src="app.js?v=20260818-22"></script>
 </body>
 </html>

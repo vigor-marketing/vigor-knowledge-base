@@ -13,6 +13,7 @@ import { IngestionQueue } from './ingestion-queue.mjs'
 import { EmbeddingClient } from './embedding-client.mjs'
 import { SearchIndex } from './search-index.mjs'
 import { AnswerService } from './answer-service.mjs'
+import { renderPreviewHtml } from './preview-render.mjs'
 
 const config = loadConfig()
 const ingestionConfigured = Boolean(config.mysqlUrl && config.cos && config.redisUrl && (config.oidc || config.testAdmin))
@@ -176,6 +177,9 @@ app.get('/api/v1/documents/:documentId/preview', async (request, reply) => {
   if (request.query?.inline !== '1') return { data: { previewable, mimeType: document.mimeType, originalFilename: document.originalFilename, reason: null } }
   const contents = await storage.downloadSource(document.objectKey)
   const filename = encodeURIComponent(document.originalFilename || 'preview')
+  // Office 文件渲染为 HTML 直接预览；PDF/图片/文本保持原文件格式由浏览器原生查看。
+  const html = await renderPreviewHtml(contents, document.mimeType)
+  if (html) return reply.header('content-disposition', `inline; filename*=UTF-8''${encodeURIComponent(document.originalFilename || 'preview')}.html`).type('text/html; charset=utf-8').send(html)
   return reply.header('content-disposition', `inline; filename*=UTF-8''${filename}`).type(document.mimeType === 'text/plain' ? 'text/plain; charset=utf-8' : document.mimeType).send(contents)
 })
 

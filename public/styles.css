@@ -269,3 +269,6 @@ html.workbench-embedded .sidebar .side-note{color:#aaa}
 .preview-dialog__close{min-height:34px!important;padding:5px 10px!important;border-color:#d4d4d4!important;background:#fff!important;color:#333!important;box-shadow:none!important}
 .preview-dialog__panel iframe{width:100%;height:100%;border:0;background:#f8fafc}
 @media(max-width:600px){.preview-dialog{padding:8px}.preview-dialog__panel{width:calc(100vw - 16px);height:calc(100vh - 16px);border-radius:12px}.preview-dialog__panel header{padding:13px 14px}}
+
+/* KNOWLEDGE_UPLOAD_HINT_V25: upload format hint + office preview shell styles */
+.file-hint{color:#999;font-size:12px;font-weight:400;line-height:1.5}
