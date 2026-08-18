@@ -1,6 +1,6 @@
 const EMBEDDED = window.self !== window.top; if (EMBEDDED) document.documentElement.classList.add("workbench-embedded");
 const API_PATHS = window.location.pathname.startsWith('/apps/knowledge-base') ? ['/apps/knowledge-base/api', '/api'] : ['/api', '/apps/knowledge-base/api']
-const state = { types: [], activeType: '', activeDocumentId: '', downloads: [], manageable: [] }
+const state = { types: [], activeType: '', activeDocumentId: '', downloads: [], allDownloads: [], manageable: [] }
 let lastEmbeddedHeight = 0
 const $ = selector => document.querySelector(selector)
 const escapeHtml = value => String(value || '').replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char]))
@@ -34,6 +34,13 @@ async function api(path, options = {}) {
 }
 function setMessage(selector, message, error = false) { const node = $(selector); node.textContent = message; node.classList.toggle('error', error); node.classList.toggle('success', Boolean(message) && !error) }
 function formatDate(value) { return value ? new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '—' }
+function formatBytes(bytes) { if (!Number.isFinite(bytes) || bytes <= 0) return ''; const units = ['B', 'KB', 'MB', 'GB']; let index = 0; let value = bytes; while (value >= 1024 && index < units.length - 1) { value /= 1024; index++ } return `${value >= 10 || index === 0 ? Math.round(value) : value.toFixed(1)} ${units[index]}` }
+function countFilesForType(typeCode) {
+  const codes = new Set([typeCode])
+  const visit = code => state.types.filter(type => (type.parentTypeCode || '') === code).forEach(child => { codes.add(child.typeCode); visit(child.typeCode) })
+  visit(typeCode)
+  return state.allDownloads.filter(document => codes.has(document.documentType)).length
+}
 function typeLabel(code) { return state.types.find(type => type.typeCode === code)?.displayName || code }
 function logicalPath(record) { return `资料下载 / ${typeLabel(record.documentType) || '未分类'} / ${record.originalFilename || record.title || '未命名资料'}` }
 function childTypes(parentTypeCode = '') { return state.types.filter(type => (type.parentTypeCode || '') === parentTypeCode) }
@@ -191,28 +198,39 @@ function renderFilters() {
   const rootTypes = childTypes('')
   const subTypes = active ? childTypes(active.typeCode) : []
   const rootCode = trail[0]?.typeCode
-  const renderCard = (type, selected) => { const hasChildren = childTypes(type.typeCode).length > 0; return `<button class="download-category-option ${selected ? 'active' : ''} ${hasChildren ? 'has-children' : ''}" type="button" data-type="${escapeHtml(type.typeCode)}" aria-pressed="${selected}"><span>分类</span><strong>${escapeHtml(type.displayName)}</strong><small>${hasChildren ? '继续浏览' : '查看文件'}</small></button>` }
+  const renderCard = (type, selected) => { const hasChildren = childTypes(type.typeCode).length > 0; const count = countFilesForType(type.typeCode); const hint = count ? `${count} 份文件` : (hasChildren ? '继续浏览' : '暂无文件'); return `<button class="download-category-option ${selected ? 'active' : ''} ${hasChildren ? 'has-children' : ''}" type="button" data-type="${escapeHtml(type.typeCode)}" aria-pressed="${selected}"><span>分类</span><strong>${escapeHtml(type.displayName)}</strong><small>${hint}</small></button>` }
   const rootCards = rootTypes.map(type => renderCard(type, type.typeCode === rootCode || (!active && type.typeCode === state.activeType))).join('')
   const sublevel = active && subTypes.length ? `<section class="category-sublevel"><div class="download-category-directory" role="list" aria-label="子资料分类">${subTypes.map(type => renderCard(type, type.typeCode === state.activeType)).join('')}</div></section>` : ''
   const breadcrumb = trail.length > 1 ? `<nav class="category-breadcrumb" aria-label="当前分类路径">${trail.map((type, index) => `${index ? '<span aria-hidden="true">/</span>' : ''}<button type="button" data-type="${escapeHtml(type.typeCode)}" ${index === trail.length - 1 ? 'aria-current="page"' : ''}>${escapeHtml(type.displayName)}</button>`).join('')}</nav>` : ''
   $('#filters').innerHTML = `<section class="category-browser"><div class="category-browser__header"><div><h3>按分类浏览</h3><p>选择分类后，在下方点击文件即可预览、下载和讨论。</p></div></div>${breadcrumb}${rootCards ? `<div class="download-category-directory" role="list" aria-label="一级资料分类">${rootCards}</div>` : '<p class="hint">暂无可用资料分类。</p>'}${sublevel}</section>`
-  $('#filters').querySelectorAll('.download-category-option, .category-breadcrumb button').forEach(button => button.addEventListener('click', () => { if (button.getAttribute('aria-current') === 'page') return; state.activeType = button.dataset.type; state.activeDocumentId = ''; renderFilters(); loadDownloads() }))
+  $('#filters').querySelectorAll('.download-category-option, .category-breadcrumb button').forEach(button => button.addEventListener('click', () => { if (button.getAttribute('aria-current') === 'page') return; state.activeType = button.dataset.type; state.activeDocumentId = ''; renderFilters(); renderDownloads() }))
 }
+// 下载页：一次拉取全部已发布资料，分类切换与文件选择都在前端完成，避免重复请求。
 async function loadDownloads() {
-  const list = $('#download-list'); list.innerHTML = '<article class="empty"><h3>正在加载资料</h3><p>请稍候。</p></article>'
+  try { state.allDownloads = await api('/v1/documents') } catch (error) { const list = $('#download-list'); list.innerHTML = `<article class="empty"><h3>无法读取资料</h3><p>${escapeHtml(error.message)}</p></article>`; return }
+  renderFilters()
+  renderDownloads()
+}
+function renderDownloads() {
+  const list = $('#download-list')
   if (!state.activeType) { list.innerHTML = '<article class="empty"><h3>请选择资料分类</h3><p>选择分类后即可查看该类文件，再点击具体文件展开下载与讨论。</p></article>'; return }
-  try {
-    state.downloads = await api(`/v1/documents?type=${encodeURIComponent(state.activeType)}`)
-    if (!state.downloads.length) { list.innerHTML = '<article class="empty"><h3>这里还没有已发布资料</h3><p>上传并完成审核发布后，会按分类显示在这里。</p></article>'; return }
-    const selected = state.downloads.find(document => document.documentId === state.activeDocumentId)
-    list.innerHTML = `<section class="download-picker"><div class="download-category__head"><div><p class="meta">当前分类文件</p><h3>${escapeHtml(typeLabel(state.activeType))}</h3></div><span>${state.downloads.length} 份资料</span></div><div class="download-file-options">${state.downloads.map(document => `<button class="download-file-option ${document.documentId === state.activeDocumentId ? 'active' : ''}" type="button" data-document-id="${escapeHtml(document.documentId)}"><span>文件</span><strong>${escapeHtml(document.title)}</strong><small>${escapeHtml(document.originalFilename)}</small></button>`).join('')}</div><div class="download-file-detail"></div></section>`
-    list.querySelectorAll('.download-file-option').forEach(button => button.addEventListener('click', () => { state.activeDocumentId = button.dataset.documentId; loadDownloads() }))
-    if (selected) list.querySelector('.download-file-detail').append(renderDocument(selected))
-  } catch (error) { list.innerHTML = `<article class="empty"><h3>无法读取资料</h3><p>${escapeHtml(error.message)}</p></article>` }
+  state.downloads = state.allDownloads.filter(document => document.documentType === state.activeType)
+  if (!state.downloads.length) { list.innerHTML = '<article class="empty"><h3>这里还没有已发布资料</h3><p>上传并完成审核发布后，会按分类显示在这里。</p></article>'; return }
+  list.innerHTML = `<section class="download-picker"><div class="download-category__head"><div><p class="meta">当前分类文件</p><h3>${escapeHtml(typeLabel(state.activeType))}</h3></div><span>${state.downloads.length} 份资料</span></div><div class="download-file-options">${state.downloads.map(document => `<button class="download-file-option ${document.documentId === state.activeDocumentId ? 'active' : ''}" type="button" data-document-id="${escapeHtml(document.documentId)}"><span>文件</span><strong>${escapeHtml(document.title)}</strong><small>${escapeHtml(document.originalFilename)}${document.byteSize ? ` · ${formatBytes(document.byteSize)}` : ''}</small></button>`).join('')}</div><div class="download-file-detail"></div></section>`
+  list.querySelectorAll('.download-file-option').forEach(button => button.addEventListener('click', () => {
+    state.activeDocumentId = button.dataset.documentId
+    list.querySelectorAll('.download-file-option').forEach(node => node.classList.toggle('active', node === button))
+    const holder = list.querySelector('.download-file-detail')
+    if (holder) { holder.replaceChildren(); const selected = state.downloads.find(document => document.documentId === state.activeDocumentId); if (selected) holder.append(renderDocument(selected)) }
+  }))
+  const selected = state.downloads.find(document => document.documentId === state.activeDocumentId)
+  const holder = list.querySelector('.download-file-detail')
+  if (holder) holder.append(selected ? renderDocument(selected) : document.createElement('p'))
 }
 function renderDocument(record) {
   const card = window.document.createElement('article'); card.className = 'file-card'; card.dataset.documentId = record.documentId
-  card.innerHTML = `<div class="file-head"><div><p class="meta">${escapeHtml(record.documentTypeName || typeLabel(record.documentType))}</p><h3>${escapeHtml(record.title)}</h3><p class="hint">${escapeHtml(record.originalFilename)} · 当前 ${escapeHtml(record.versionLabel)} · 更新于 ${formatDate(record.updatedAt)}</p><p class="storage-path" title="资料逻辑路径（不含存储凭据）">${escapeHtml(logicalPath(record))}</p></div><div class="file-actions"><button class="preview btn-secondary" type="button">预览文件</button><button class="download" type="button">下载文件</button></div></div><div class="public-note">所有拥有资料库访问权限的用户均可查看评价、建议和评论附件。</div><details class="comment-box"><summary>评价与建议（所有可访问用户可见）</summary><div class="comment-list"><p class="hint">展开后加载全部评论。</p></div><form class="comment-form"><select name="kind"><option value="comment">评价</option><option value="suggestion">建议</option></select><textarea name="content" maxlength="2000" placeholder="输入 @姓名 或 @账号 提及相关人；评论将对所有可访问用户展示" required></textarea><label class="comment-attachment">附件（可选，图片 / PDF / Office，最大 10 MB）<input name="attachment" type="file" accept=".pdf,.docx,.xlsx,.pptx,.txt,.md,.jpg,.jpeg,.png,.webp"/></label><button>公开提交</button><p class="comment-state" role="status"></p></form></details>`
+  const sizeText = record.byteSize ? ` · ${formatBytes(record.byteSize)}` : ''
+  card.innerHTML = `<div class="file-head"><div><p class="meta">${escapeHtml(record.documentTypeName || typeLabel(record.documentType))}</p><h3>${escapeHtml(record.title)}</h3><p class="hint">${escapeHtml(record.originalFilename)}${sizeText} · 当前 ${escapeHtml(record.versionLabel)} · 更新于 ${formatDate(record.updatedAt)}</p><p class="storage-path" title="资料逻辑路径（不含存储凭据）">${escapeHtml(logicalPath(record))}</p></div><div class="file-actions"><button class="preview btn-secondary" type="button">预览文件</button><button class="download" type="button">下载文件</button></div></div><div class="public-note">所有拥有资料库访问权限的用户均可查看评价、建议和评论附件。</div><details class="comment-box"><summary>评价与建议（所有可访问用户可见）</summary><div class="comment-list"><p class="hint">展开后加载全部评论。</p></div><form class="comment-form"><select name="kind"><option value="comment">评价</option><option value="suggestion">建议</option></select><textarea name="content" maxlength="2000" placeholder="输入 @姓名 或 @账号 提及相关人；评论将对所有可访问用户展示" required></textarea><label class="comment-attachment">附件（可选，图片 / PDF / Office，最大 10 MB）<input name="attachment" type="file" accept=".pdf,.docx,.xlsx,.pptx,.txt,.md,.jpg,.jpeg,.png,.webp"/></label><button>公开提交</button><p class="comment-state" role="status"></p></form></details>`
   card.querySelector('.download').addEventListener('click', () => downloadDocument(record.documentId))
   card.querySelector('.preview').addEventListener('click', () => previewDocument(record.documentId))
   card.querySelector('details').addEventListener('toggle', event => { if (event.target.open) { loadComments(card, record.documentId).then(() => revealExpandedContent(event.target)); revealExpandedContent(event.target) } })

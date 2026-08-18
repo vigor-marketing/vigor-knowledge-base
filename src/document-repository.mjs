@@ -308,7 +308,7 @@ export class DocumentRepository {
       `SELECT document.document_id AS documentId, document.title, document.document_type AS documentType,
               COALESCE(type.display_name, document.document_type) AS documentTypeName,
               version.version_label AS versionLabel, version.original_filename AS originalFilename,
-              version.created_at AS updatedAt
+              version.byte_size AS byteSize, version.created_at AS updatedAt
        FROM knowledge_documents document
        JOIN knowledge_document_versions version ON version.version_id = document.current_version_id
        LEFT JOIN knowledge_document_types type ON type.type_code = document.document_type
