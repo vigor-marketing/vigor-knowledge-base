@@ -203,3 +203,25 @@ html.workbench-embedded .sidebar .nav.active,html.workbench-embedded .sidebar .n
 html.workbench-embedded .sidebar .nav b{color:#9a9a9a}
 html.workbench-embedded .sidebar .sidebar-label{color:#999}
 html.workbench-embedded .sidebar .side-note{color:#aaa}
+
+/* KNOWLEDGE_PLAIN_TEXT_V18: plain-text, black-first, red-as-accent only */
+.sidebar{background:#fff;border-right:1px solid #ececec;padding:22px 14px}
+.nav,.category-nav-item{border-left:0!important;background:transparent!important}
+.nav:hover,.category-nav-item:hover{background:#f6f6f6!important;color:#1f1f23!important}
+.nav.active,.category-nav-item.active{background:transparent!important;box-shadow:none!important;border-radius:6px}
+.nav.active b,.category-nav-item.active{color:#d92d20!important;font-weight:700}
+.category-nav-item.level-1{color:#888!important}
+.category-nav-item.level-1.active{color:#d92d20!important}
+.category-nav-count{margin-left:auto;color:#d92d20;font-size:12px}
+.category-nav-ico{display:none}
+/* 去状态色块：选中=红标记（白底+红字/红边），不再有浅色填充 */
+.download-category-option.active,.category-block.active,.download-file-option.active{background:#fff!important;color:#d92d20!important;border-color:#d92d20!important;box-shadow:none!important}
+.download-file-option.active{border-left:3px solid #d92d20!important}
+.filter.active{background:#1f1f23!important;border-color:#1f1f23!important}
+.ai-answer{background:#fff!important;border-color:#e6e6e6!important;color:#333!important}
+.ai-answer b{color:#d92d20}
+.public-note,.operation-mode{background:#fff!important;border-color:#e6e6e6!important;border-left:3px solid #d92d20!important;color:#d92d20!important}
+.comment-kind{background:transparent!important;color:#d92d20!important}
+.attachment-download{border-color:#e6e6e6!important;background:#fff!important;color:#333!important}
+.attachment-download:hover{border-color:#d92d20!important;color:#d92d20!important}
+.search-file:hover,.download-category-option:hover,.download-file-option:hover{border-color:#c9c9c9!important;background:#fff!important}
