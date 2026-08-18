@@ -5,16 +5,20 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <meta name="robots" content="noindex"/>
   <title>企业知识库</title>
-  <link rel="stylesheet" href="styles.css?v=20260818-5"/>
+  <link rel="stylesheet" href="styles.css?v=20260818-6"/>
 </head>
 <body>
   <main class="shell">
     <aside class="sidebar">
       <div class="brand"><span class="brand-mark">▦</span><span>企业知识库</span></div>
-      <nav aria-label="知识库菜单">
+      <nav aria-label="知识库菜单" class="main-nav">
         <button class="nav active" data-panel="downloads"><b>⇩</b>资料下载</button>
         <button class="nav" data-panel="manage"><b>↑</b>资料管理</button>
       </nav>
+      <div class="sidebar-section" id="downloads-nav">
+        <p class="sidebar-label">资料分类</p>
+        <nav id="category-nav" class="category-nav" aria-label="资料分类"><p class="hint">正在加载分类…</p></nav>
+      </div>
       <p class="side-note">需要什么资料，随时回来找</p>
     </aside>
     <section class="content">
@@ -35,11 +39,10 @@
       <section id="downloads" class="panel active">
         <div class="section-heading"><div><h2>资料下载</h2><p>浏览已发布资料，按分类筛选并下载当前版本。</p></div></div>
         <section class="download-search" aria-labelledby="download-search-title"><div><h3 id="download-search-title">搜索资料</h3><p>输入产品名称、型号、参数或正文关键词；结果仅展示最相关的资料。</p></div><form id="search-form" class="search-form"><input id="search-query" type="search" maxlength="500" placeholder="例如：P110 产品的最大工作压力" required/><button class="btn-primary">搜索资料</button></form><div id="search-state" class="search-state" role="status" aria-live="polite">输入关键词即可在已发布资料中检索。</div><div id="search-results" class="list" hidden></div></section>
-        <div id="filters" class="filters" aria-label="资料分类"></div>
         <div id="download-list" class="download-list"><article class="empty"><h3>正在加载资料</h3><p>请稍候。</p></article></div>
       </section>
     </section>
   </main>
-  <script type="module" src="app.js?v=20260818-5"></script>
+  <script type="module" src="app.js?v=20260818-6"></script>
 </body>
 </html>

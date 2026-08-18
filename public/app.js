@@ -112,7 +112,7 @@ async function loadTypes() {
   $('#record-type-filter').innerHTML = '<option value="">全部资料</option>' + state.types.map(type => `<option value="${escapeHtml(type.typeCode)}">${escapeHtml(categoryOptionLabel(type))}</option>`).join('')
   if (state.activeType && !state.types.some(type => type.typeCode === state.activeType)) state.activeType = ''
   if (!state.activeType) { const root = childTypes('')[0]?.typeCode || state.types[0]?.typeCode || ''; const children = childTypes(root); state.activeType = children.length ? children[0].typeCode : root }
-  renderFilters()
+  renderCategoryTree()
   renderTypeList()
   setMessage('#service-status', '资料服务已就绪')
 }
@@ -192,33 +192,40 @@ function syncUploadMode() {
     setMessage('#upload-state', '')
   }
 }
-function renderFilters() {
-  const active = state.types.find(type => type.typeCode === state.activeType)
-  const trail = active ? categoryTrail(active.typeCode) : []
-  const parentCode = active?.parentTypeCode || ''
-  const siblings = parentCode ? childTypes(parentCode) : childTypes('')
-  const subTypes = active ? childTypes(active.typeCode) : []
-  const renderCard = (type, selected) => { const hasChildren = childTypes(type.typeCode).length > 0; const count = countFilesForType(type.typeCode); const hint = count ? `${count} 份文件` : (hasChildren ? '继续浏览' : '暂无文件'); return `<button class="download-category-option ${selected ? 'active' : ''} ${hasChildren ? 'has-children' : ''}" type="button" data-type="${escapeHtml(type.typeCode)}" aria-pressed="${selected}"><span>分类</span><strong>${escapeHtml(type.displayName)}</strong><small>${hint}</small></button>` }
-  const siblingCards = siblings.map(type => renderCard(type, type.typeCode === state.activeType)).join('')
-  const sublevel = subTypes.length ? `<section class="category-sublevel"><div class="download-category-directory" role="list" aria-label="子资料分类">${subTypes.map(type => renderCard(type, type.typeCode === state.activeType)).join('')}</div></section>` : ''
-  const breadcrumb = trail.length > 1 ? `<nav class="category-breadcrumb" aria-label="当前分类路径">${trail.map((type, index) => `${index ? '<span aria-hidden="true">/</span>' : ''}<button type="button" data-type="${escapeHtml(type.typeCode)}" ${index === trail.length - 1 ? 'aria-current="page"' : ''}>${escapeHtml(type.displayName)}</button>`).join('')}</nav>` : ''
-  const browserLabel = parentCode ? '同级分类' : '一级分类'
-  $('#filters').innerHTML = `<section class="category-browser"><div class="category-browser__header"><div><h3>按分类浏览</h3><p>选择分类后，在下方点击文件即可预览、下载和讨论。</p></div></div>${breadcrumb}${siblingCards ? `<div class="download-category-directory" role="list" aria-label="${browserLabel}">${siblingCards}</div>` : '<p class="hint">暂无可用资料分类。</p>'}${sublevel}</section>`
-  $('#filters').querySelectorAll('.download-category-option, .category-breadcrumb button').forEach(button => button.addEventListener('click', () => {
-    if (button.getAttribute('aria-current') === 'page') return
-    let typeCode = button.dataset.type
-    // 点击分类卡片时若含子分类，自动进入第一个子分类直达文件（面包屑点击则停留在所在层）。
-    if (!button.closest('.category-breadcrumb')) { const children = childTypes(typeCode); if (children.length) typeCode = children[0].typeCode }
-    state.activeType = typeCode
-    state.activeDocumentId = ''
-    renderFilters()
+// 左侧分类树：一级分类可展开子分类，点击直接选中并在右侧显示文件，无页面跳转感。
+function renderCategoryTree() {
+  const container = $('#category-nav')
+  if (!container || !state.types.length) return
+  if (!state.expandedCategories) state.expandedCategories = new Set()
+  categoryTrail(state.activeType).forEach(type => state.expandedCategories.add(type.typeCode))
+  state.expandedCategories.add(state.activeType)
+  const renderItem = (type, depth) => {
+    const children = childTypes(type.typeCode)
+    const isActive = type.typeCode === state.activeType
+    const isOpen = state.expandedCategories.has(type.typeCode)
+    const count = countFilesForType(type.typeCode)
+    return `<div class="category-nav-item ${isActive ? 'active' : ''}" data-type="${escapeHtml(type.typeCode)}" data-depth="${depth}"><span class="category-nav-caret${children.length ? '' : ' empty'}">${children.length ? (isOpen ? '▾' : '▸') : ''}</span><span class="category-nav-name">${escapeHtml(type.displayName)}</span>${count ? `<span class="category-nav-count">${count}</span>` : ''}</div>${children.length && isOpen ? children.map(child => renderItem(child, depth + 1)).join('') : ''}`
+  }
+  const roots = childTypes('')
+  container.innerHTML = roots.length ? roots.map(root => renderItem(root, 0)).join('') : '<p class="hint">暂无可用分类。</p>'
+  container.querySelectorAll('.category-nav-caret:not(.empty)').forEach(caret => caret.addEventListener('click', event => {
+    event.stopPropagation()
+    const typeCode = caret.closest('.category-nav-item').dataset.type
+    if (state.expandedCategories.has(typeCode)) state.expandedCategories.delete(typeCode); else state.expandedCategories.add(typeCode)
+    renderCategoryTree()
+  }))
+  container.querySelectorAll('.category-nav-item').forEach(item => item.addEventListener('click', () => {
+    const typeCode = item.dataset.type
+    if (state.activeType !== typeCode) { state.activeType = typeCode; state.activeDocumentId = '' }
+    state.expandedCategories.add(typeCode)
+    renderCategoryTree()
     renderDownloads()
   }))
 }
 // 下载页：一次拉取全部已发布资料，分类切换与文件选择都在前端完成，避免重复请求。
 async function loadDownloads() {
   try { state.allDownloads = await api('/v1/documents') } catch (error) { const list = $('#download-list'); list.innerHTML = `<article class="empty"><h3>无法读取资料</h3><p>${escapeHtml(error.message)}</p></article>`; return }
-  renderFilters()
+  renderCategoryTree()
   renderDownloads()
 }
 function renderDownloads() {
@@ -270,7 +277,7 @@ async function downloadCommentAttachment(attachmentId) { try { const data = awai
 async function submitComment(event, card, documentId) { event.preventDefault(); const form = event.currentTarget; const output = form.querySelector('.comment-state'); const file = form.attachment.files[0]; try { if (file) { const payload = new FormData(); payload.append('metadata', JSON.stringify({ kind: form.kind.value, content: form.content.value.trim() })); payload.append('file', file); await api(`/v1/documents/${encodeURIComponent(documentId)}/comments/attachment`, { method: 'POST', body: payload }) } else await api(`/v1/documents/${encodeURIComponent(documentId)}/comments`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: form.kind.value, content: form.content.value.trim() }) }); form.reset(); output.textContent = '已公开提交，所有可访问用户均可查看。'; output.classList.remove('error'); await loadComments(card, documentId) } catch (error) { output.textContent = `提交失败：${error.message}`; output.classList.add('error') } }
 async function submitReply(event, card, documentId, parentCommentId) { event.preventDefault(); const form = event.currentTarget; const output = form.querySelector('.comment-state'); try { await api(`/v1/documents/${encodeURIComponent(documentId)}/comments`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'comment', content: form.querySelector('textarea').value.trim(), parentCommentId }) }); await loadComments(card, documentId) } catch (error) { output.textContent = `回复失败：${error.message}`; output.classList.add('error') } }
 
-document.querySelectorAll('.nav').forEach(button => button.addEventListener('click', () => { const page = ({ manage: ['资料管理', '上传、更新、发布与归档资料；所有变更保留版本记录。'], downloads: ['资料下载', '搜索、筛选并下载已发布的企业资料。'] })[button.dataset.panel]; document.querySelectorAll('.nav').forEach(node => node.classList.toggle('active', node === button)); document.querySelectorAll('.panel').forEach(node => node.classList.toggle('active', node.id === button.dataset.panel)); $('#page-title').textContent = page[0]; $('#page-description').textContent = page[1]; if (button.dataset.panel === 'downloads') loadDownloads(); if (button.dataset.panel === 'manage') loadManageableDocuments() }))
+document.querySelectorAll('.nav').forEach(button => button.addEventListener('click', () => { const page = ({ manage: ['资料管理', '上传、更新、发布与归档资料；所有变更保留版本记录。'], downloads: ['资料下载', '搜索、筛选并下载已发布的企业资料。'] })[button.dataset.panel]; document.querySelectorAll('.nav').forEach(node => node.classList.toggle('active', node === button)); document.querySelectorAll('.panel').forEach(node => node.classList.toggle('active', node.id === button.dataset.panel)); $('#page-title').textContent = page[0]; $('#page-description').textContent = page[1]; const navSection = $('#downloads-nav'); if (navSection) navSection.hidden = button.dataset.panel !== 'downloads'; if (button.dataset.panel === 'downloads') loadDownloads(); if (button.dataset.panel === 'manage') loadManageableDocuments() }))
 $('#existing-document').addEventListener('change', syncUploadMode)
 $('#refresh-records').addEventListener('click', loadManageableDocuments)
 $('#record-type-filter').addEventListener('change', renderManagementRecords)
