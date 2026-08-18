@@ -90,3 +90,47 @@ html.workbench-embedded .shell{display:grid;grid-template-columns:210px minmax(0
 .category-nav-item.level-1 .category-nav-name{font-weight:500;font-size:14px}
 .category-nav-count{margin-left:auto;flex:0 0 auto;padding:1px 7px;border-radius:999px;background:rgba(255,255,255,.14);color:#dce8f2;font-size:11px;font-weight:700}
 .category-nav-item.active .category-nav-count{background:rgba(255,255,255,.24)}
+
+/* KNOWLEDGE_WORKBENCH_REDBLACK_V15: workbench black/red theme, plain-text categories */
+:root{color:#17171d;background:#f4f4f6}
+.shell{grid-template-columns:216px minmax(0,1fr)}
+.sidebar{background:#16161c;color:#b8b8c4;padding:22px 14px}
+.brand{color:#fff;margin-bottom:30px;font-size:21px}
+.nav{color:#a8a8b4;padding:9px 12px;border-radius:6px;font-size:15px}
+.nav b{color:#8f8f9c;width:auto;margin-right:8px;font-size:15px}
+.nav:hover{background:#22222b;color:#fff}
+.nav.active{background:transparent;color:#f0524f;font-weight:700;border-left:3px solid #f0524f;border-radius:0;padding-left:9px}
+.sidebar-section{margin-top:26px}
+.sidebar-label{color:#71717d;font-size:11px;letter-spacing:.1em;margin:0 4px 8px}
+.category-nav{display:grid;gap:1px;overflow-y:auto;max-height:calc(100vh - 300px);padding-right:4px}
+.category-nav-item{display:flex;align-items:center;gap:8px;width:100%;padding:7px 12px;border-radius:6px;background:transparent;color:#b8b8c4;text-align:left;cursor:pointer;border-left:3px solid transparent;min-width:0}
+.category-nav-item:hover{background:#22222b;color:#fff}
+.category-nav-item.active{color:#f0524f;font-weight:700;border-left-color:#f0524f}
+.category-nav-item.level-1{padding-left:26px;color:#93939f;font-size:14px}
+.category-nav-item.level-1.active{color:#f26a68}
+.category-nav-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.category-nav-count{margin-left:auto;flex:0 0 auto;color:#71717d;font-size:12px}
+.side-note{color:#71717d}
+/* 内容区主色切换为红，保持浅底紧凑 */
+button:not(.nav){background:#d92d20;border-color:#d92d20}
+button:not(.nav):hover{background:#b91c1c}
+.btn-primary{background:#d92d20!important;border-color:#d92d20!important}
+.btn-primary:hover{background:#b91c1c!important}
+.filter.active{border-color:#d92d20!important;background:#d92d20!important}
+.download-category-option.active,.category-block.active,.download-file-option.active{border-color:#d92d20!important;background:#fdf0ef!important;box-shadow:0 0 0 3px rgba(217,45,32,.12)!important}
+.search-mode{color:#d92d20}
+.ai-answer{border-color:#f5c6c3;background:#fdf3f2;color:#17171d}
+.ai-answer b{color:#b42318}
+.search-snippet mark,.search-file h3 mark{background:#fdecea;color:#b42318}
+.mention{background:#fdecea;color:#b42318}
+.public-note{border-color:#f5c6c3;background:#fdf3f2;color:#b42318}
+.comment-kind{background:#fdecea;color:#b42318}
+.attachment-download{border-color:#f5c6c3!important;background:#fdf3f2!important;color:#b42318!important}
+.category-breadcrumb button{color:#d92d20!important}
+.operation-mode{border-color:#f5c6c3;background:#fdf3f2;color:#b42318}
+.success{color:#b91c1c!important}
+/* 工作台嵌入侧边同黑红 */
+html.workbench-embedded .sidebar{background:#16161c;color:#b8b8c4}
+html.workbench-embedded .sidebar .nav,html.workbench-embedded .sidebar .nav:hover{color:#a8a8b4}
+html.workbench-embedded .sidebar .nav.active,html.workbench-embedded .sidebar .nav.active:hover{color:#f0524f;background:transparent;box-shadow:none}
+html.workbench-embedded .sidebar .nav b{color:#8f8f9c}
